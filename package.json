@@ -1,0 +1,21 @@
+{
+  "name": "sahne",
+  "version": "1.0.0-rc0",
+  "description": "",
+  "main": "index.js",
+  "peerDependencies": {
+    "commander": "^11.1.0",
+    "puppeteer": "^21.7.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "sahne": "./cli.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@web/config-loader": "^0.3.1"
+  }
+}
