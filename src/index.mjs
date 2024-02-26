@@ -107,7 +107,7 @@ const handleRequest = async (
       /**
        * @type {import(".").PuppeteerRespondArgs}
        */
-      const proxyResponsePuppeteerArgs = [response, 1];
+      const proxyResponsePuppeteerArgs = [response, undefined];
       if (overrides.proxyResponseArgs) {
         overrides.proxyResponseArgs(
           proxyResponsePuppeteerArgs,
