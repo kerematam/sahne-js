@@ -30,8 +30,7 @@ const checkShouldProxied = (reqUrl, targetUrl) => {
 };
 
 /**
- *
- * @param {import(".").HTTPRequest} interceptedRequest
+ * @param {import("puppeteer").HTTPRequest} interceptedRequest
  * @param {import(".").Interceptor} interceptConfigs
  * @returns {Promise<void>}
  */
@@ -78,7 +77,6 @@ const handleRequest = async (
     const responseBody = await proxyResponse.arrayBuffer();
     const responseHeaders = proxyResponse.headers.raw();
 
-    
     const internalRespondCondition = proxyResponse.status !== 404;
     const respondCondition = ignoreRequestAfterProxyResponse
       ? !ignoreRequestAfterProxyResponse(
@@ -109,10 +107,7 @@ const handleRequest = async (
       return;
     }
 
-    // interceptedRequest.continue();
   } catch (e) {
-    
-    console.log("Proxy request failure", e);
     interceptedRequest.continue();
   }
 };
@@ -127,17 +122,7 @@ const run = async ({
     goto: {},
     launch: {},
   },
-  onRequest,
-  proxyTarget,
-  target,
-  urlRewrite,
-  overrides = {
-    proxyRequestArgs: undefined,
-    proxyResponseArgs: undefined,
-  },
-  ignoreRequest,
-  ignoreRequestAfterProxyResponse,
-  interceptors = [],
+  interceptor,
 }) => {
   const browser = await puppeteer.launch({
     defaultViewport: null,
@@ -149,17 +134,7 @@ const run = async ({
   await page.setViewport({ width: 0, height: 0 });
   await page.setRequestInterception(true);
 
-  const firstConfig = {
-    onRequest,
-    target,
-    proxyTarget,
-    urlRewrite,
-    overrides,
-    ignoreRequest,
-    ignoreRequestAfterProxyResponse,
-  };
-  const allConfigs = [firstConfig, ...interceptors];
-
+  const allConfigs = Array.isArray(interceptor) ? interceptor : [interceptor];
   for (const config of allConfigs) {
     page.on("request", (interceptedRequest) => {
       if (interceptedRequest.isInterceptResolutionHandled()) return;
@@ -167,7 +142,7 @@ const run = async ({
     });
   }
 
-  await page.goto(initialUrl || target, puppeteerOptions.goto);
+  await page.goto(initialUrl, puppeteerOptions.goto);
 };
 
 export default run;

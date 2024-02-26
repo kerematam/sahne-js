@@ -23,14 +23,11 @@ async function loadModule() {
 
 program
   .version("0.1.0")
-  .option(
-    "-s, --sourceOrigin <sourceOrigin>",
-    "URL origin to the server that requests will be proxied to"
-  )
-  .option(
-    "-t, --targetOrigin <targetOrigin>",
-    "URL origin to the target server that requests will be intercepted and proxied from"
-  )
+  // TODO: add options to the CLI
+  // .option(
+  //   "-t, --target <target>",
+  //   "URL origin to the target server that requests will be intercepted and proxied from"
+  // )
   .action(async (commandConfigs) => {
     const run = await loadModule();
     const fileConfigs = await loadConfig();

@@ -1,8 +1,11 @@
 import type { RequestInfo } from "node-fetch";
 import type { RequestInit, Response } from "node-fetch";
-import type { ResponseForRequest, PuppeteerLaunchOptions } from "puppeteer";
+import type {
+  ResponseForRequest,
+  PuppeteerLaunchOptions,
+  HTTPRequest,
+} from "puppeteer";
 import type { GoToOptions } from "puppeteer";
-export type { HTTPRequest } from "puppeteer";
 
 export type NodeFetchFirstArg = URL | RequestInfo;
 export type NodeFetchArgs = [NodeFetchFirstArg, RequestInit];
@@ -11,24 +14,20 @@ export type ProxyRequestOverrideArgs = (
   interceptedRequest: HTTPRequest
 ) => void;
 
-/**
- * {@link HTTPRequest.respond}
- */
 export type PuppeteerRespondArgs = [
-  response: Partial<ResponseForRequest>,
+  response: ResponseForRequest,
   priority?: number
 ];
 
-export type ProxyResponseOverrideArgs = (
-  args: PuppeteerRespondArgs,
-  interceptedRequest: HTTPRequest,
-  nodeFetchResponse: Response
-) => void;
+// export type ProxyResponseOverrideArgs = {
+//   args: PuppeteerRespondArgs;
+//   interceptedRequest: HTTPRequest;
+//   nodeFetchResponse: Response;
+// };
 
-export type onRequest = (request: HTTPRequest) => void;
-
-export type UrlRewrite = (url: string) => string;
-
+/**
+ * Represents an interceptor configuration.
+ */
 export interface Interceptor {
   /**
    * The proxy target where intercepted requests will be sent (proxied to).
@@ -38,7 +37,7 @@ export interface Interceptor {
    * @example https://example.com:8080
    * @example https://example.com/path/to/intercept
    */
-  proxyTarget: string;
+  proxyTarget?: string;
   /**
    * URL to the target where requests will be intercepted.
    * It must include protocol (eg. https).
@@ -47,16 +46,18 @@ export interface Interceptor {
    * @example https://example.com:8080
    * @example https://example.com/path/to/intercept
    */
-  target: string;
+  target?: string;
   /**
-   * The function for rewriting URLs.
+   * Function to rewrite the URL before sending the request to the proxy target.
+   * @param {string} requestUrl - The intercepted request URL.
+   * @returns {string} proxyTargetUrl - The rewritten URL to be sent to the proxy target.
    */
-  urlRewrite?: UrlRewrite;
+  urlRewrite?: (requestUrl: string) => string;
   /**
-   * Intercept and handlew direclty with Puppeteer's request API.
+   * Intercept and handle directly with Puppeteer's request API.
    * @link https://pptr.dev/guides/request-interception
    *
-   * @param {HTTPRequest} intercepted Puppeteer's Request instance
+   * @param {HTTPRequest} intercepted - Puppeteer's Request instance
    * @returns {void}
    */
   onRequest?: (request: HTTPRequest) => void;
@@ -64,31 +65,54 @@ export interface Interceptor {
    * The overrides for the request and response handling.
    */
   overrides?: {
-    proxyRequestArgs?: ProxyRequestOverrideArgs;
-    proxyResponseArgs?: ProxyResponseOverrideArgs;
+    /**
+     * Override proxy request arguments to be supplied to node-fetch's fetch method.
+     * @param {NodeFetchArgs} args
+     * @param {HTTPRequest} interceptedRequest
+     * @returns {void}
+     */
+    proxyRequestArgs?: (args, interceptedRequest) => void;
+    /**
+     * Override proxy response arguments to be supplied to Puppeteer's respond method.
+     *
+     * @param {PuppeteerRespondArgs} args - puppeteer response arguments
+     * @param {HTTPRequest} interceptedRequest - puppeteer intercepted request
+     * @param {Response} nodeFetchResponse - node-fetch response
+     * @returns {void}
+     *
+     * @example
+     * proxyResponseArgs([response]) {
+     *   response.headers["X-Intercepted-By"] = "sahne";
+     * }
+     */
+    proxyResponseArgs?: (
+      args: PuppeteerRespondArgs,
+      interceptedRequest: HTTPRequest,
+      nodeFetchResponse: Response
+    ) => void;
   };
   /**
-   * The function for ignoring requests to be intercepted
-   * @param request intercepted request
-   * @param isRequestIgnored internally evaluated ignore decision
+   * The function for ignoring requests to be intercepted.
+   * @param {HTTPRequest} request - The intercepted request.
+   * @param {boolean} isRequestIgnored - Internally evaluated ignore decision.
    * @returns {boolean}
    */
-  ignoreRequest: (request: HTTPRequest, isRequestIgnored: boolean) => boolean;
+  ignoreRequest?: (request: HTTPRequest, isRequestIgnored: boolean) => boolean;
   /**
-   * The function for ignoring requests to be intercepted after proxy response
-   * @param proxyResponse node-fetch proxy response
-   * @param interceptedRequest puppeteer intercepted request
-   * @param isRequestIgnored internally evaluated ignore decision, happens when request return with status code 404.
+   * The function for ignoring requests to be intercepted after proxy response.
+   * @param {Response} proxyResponse - The node-fetch proxy response.
+   * @param {HTTPRequest} interceptedRequest - The puppeteer intercepted request.
+   * @param {boolean} isRequestIgnored - Internally evaluated ignore decision, happens when request returns with status code 404.
    * @returns {boolean}
    */
-  ignoreRequestAfterProxyResponse: (
+  ignoreRequestAfterProxyResponse?: (
     proxyResponse: Response,
     interceptedRequest: HTTPRequest,
     isRequestIgnored: boolean
   ) => boolean;
 }
 
-export declare interface SahneConfigs extends Interceptor {
+export declare interface SahneConfigs {
   /**
    * The initial URL to navigate to.
    * It must include protocol (eg. https://).
@@ -111,7 +135,7 @@ export declare interface SahneConfigs extends Interceptor {
   /**
    * The interceptors to be used for the Sahne instance.
    */
-  interceptors?: Interceptor[];
+  interceptor?: Interceptor | Interceptor[];
 }
 
 /**
