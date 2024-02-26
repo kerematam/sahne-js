@@ -7,7 +7,7 @@ module.exports = defineSahneConfig({
   initialUrl: target,
   interceptor: [
     {
-      target: target,
+      matchTarget: target,
       proxyTarget: "http://localhost:3000",
       ignoreRequest: (req) => req.url().startsWith(`${target}/mock-api`),
     },

@@ -16,6 +16,27 @@ export type PuppeteerRespondArgs = [
 ];
 
 /**
+ * Function that determines whether a request should be intercepted or not.
+ * @param {string} url - The URL of the intercepted request.
+ * @param {HTTPRequest} request - The intercepted request.
+ * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
+ */
+export declare function MatchTargetFunction(
+  url: string,
+  request: HTTPRequest
+): boolean;
+
+/**
+ * Function that determines the proxy target URL for the intercepted request.
+ * @param {string} url - The URL of the intercepted request.
+ * @param {HTTPRequest} request - The intercepted request (from Puppeteer).
+ */
+export declare function ProxyTargetFunction(
+  url: string,
+  request: HTTPRequest
+): string;
+
+/**
  * Represents an interceptor configuration.
  */
 export interface Interceptor {
@@ -27,7 +48,7 @@ export interface Interceptor {
    * @example https://example.com:8080
    * @example https://example.com/path/to/intercept
    */
-  proxyTarget?: string;
+  proxyTarget?: string | ProxyTargetFunction;
   /**
    * URL to the target where requests will be intercepted.
    * It must include protocol (eg. https).
@@ -36,7 +57,7 @@ export interface Interceptor {
    * @example https://example.com:8080
    * @example https://example.com/path/to/intercept
    */
-  target?: string;
+  matchTarget: string | MatchTargetFunction;
   /**
    * Function to rewrite the URL before sending the request to the proxy target.
    * @param {string} requestUrl - The intercepted request URL.
@@ -44,7 +65,8 @@ export interface Interceptor {
    */
   urlRewrite?: (requestUrl: string) => string;
   /**
-   * Intercept and handle directly with Puppeteer's request API.
+   * Intercept and handle directly with Puppeteer's request API. This is called
+   * before handling of any other rules.
    * @link https://pptr.dev/guides/request-interception
    *
    * @param {HTTPRequest} intercepted - Puppeteer's Request instance
@@ -90,7 +112,7 @@ export interface Interceptor {
    * @param {boolean} isRequestIgnored - Internally evaluated ignore decision.
    * @returns {boolean}
    */
-  ignoreRequest?: (request: HTTPRequest, isRequestIgnored: boolean) => boolean;
+  ignoreRequest?: (request: HTTPRequest) => boolean;
   /**
    * The function for ignoring requests to be intercepted after proxy response.
    * @param {Response} proxyResponse - The node-fetch proxy response.

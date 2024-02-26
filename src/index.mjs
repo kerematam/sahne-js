@@ -9,25 +9,58 @@ import fetch from "node-fetch";
  */
 export const defineSahneConfig = (options) => options;
 
-const checkShouldProxied = (reqUrl, targetUrl) => {
+
+/**
+ * @param {import("puppeteer").HTTPRequest} interceptedRequest 
+ * @param {string | import(".").MatchTargetFunction} matchTarget 
+ * @returns {boolean}
+ */
+const checkIsMatched = (interceptedRequest, matchTarget) => {
+  const requestUrlString = interceptedRequest.url();
+
+  if (typeof matchTarget === "function") {
+    return matchTarget(requestUrlString, interceptedRequest);
+  }
+
   // INFO: optimistic check for perfornace reasons
-  if (!reqUrl.startsWith(targetUrl)) return false;
+  if (!requestUrlString.startsWith(matchTarget)) return false;
 
   /**
-   * INFO: Intercepted request URL with ports might return false positive
-   * with above condition when targetUrl does not have a port.
+   * INFO: Intercepted request URL with port might return false positive
+   * with above condition when matchTarget does not have a port.
    *
    * Example:
-   * const targetUrl = "https://example.com"
-   * const reqUrl = "https://example.com:3000"
+   * const matchTarget = "https://example.com"
+   * const requestUrl = "https://example.com:3000"
    *
    * So we need to make sure that ports are matching.
    */
-  const reqUrlInstance = new URL(reqUrl);
-  const targetUrlInstance = new URL(targetUrl);
-  if (reqUrlInstance.port !== targetUrlInstance.port) return false;
+  const requestUrlInstance = new URL(requestUrlString);
+  const targetUrlInstance = new URL(matchTarget);
+  if (requestUrlInstance.port !== targetUrlInstance.port) return false;
 
   return true;
+};
+
+/**
+ * @param {import("puppeteer").HTTPRequest} interceptedRequest 
+ * @param {string | import(".").ProxyTargetFunction} proxyTarget 
+ * @returns 
+ */
+const getProxyTargetUrl = (interceptedRequest, proxyTarget) => {
+  const requestUrlString = interceptedRequest.url();
+  if (typeof proxyTarget === "function") {
+    return proxyTarget(requestUrlString, interceptedRequest);
+  }
+
+  if (typeof proxyTarget === "string") {
+    const requestOrigin = new URL(interceptedRequest.url()).origin;
+    let proxyTargetUrl = requestUrlString.replace(requestOrigin, proxyTarget);
+
+    return proxyTargetUrl;
+  }
+
+  throw new Error("Invalid proxyTarget configuration,");
 };
 
 /**
@@ -40,12 +73,8 @@ const handleRequest = async (
   interceptedRequest,
   {
     onRequest,
-    // TODO change to function | string
-    proxyTarget = "",
-    // TODO: matchTarget
-    // TODO change to function | string
-    target = "",
-    urlRewrite,
+    matchTarget,
+    proxyTarget,
     overrides = {},
     ignoreRequest,
     ignoreRequestAfterProxyResponse,
@@ -56,17 +85,18 @@ const handleRequest = async (
     if (interceptedRequest.isInterceptResolutionHandled()) return;
   }
 
-  const requestUrlString = interceptedRequest.url();
-  let shouldProxied = checkShouldProxied(requestUrlString, target);
-  if (ignoreRequest) {
-    shouldProxied = !ignoreRequest(interceptedRequest, !shouldProxied);
-  }
+  // if (
+  //   typeof matchTarget === "function" &&
+  //   !matchTarget(interceptedRequest.url(), interceptedRequest)
+  // ) {
+  //   return;
+  // }
 
-  if (!shouldProxied) return;
+  const isMatched = checkIsMatched(interceptedRequest, matchTarget);
+  if (!isMatched) return;
+  if (ignoreRequest && ignoreRequest(interceptedRequest)) return;
 
-  let proxyUrl = urlRewrite
-    ? urlRewrite(requestUrlString)
-    : requestUrlString.replace(target, proxyTarget);
+  const proxyTargetUrl = getProxyTargetUrl(interceptedRequest, proxyTarget);
 
   let proxyRequestOptions = {
     method: interceptedRequest.method(),
@@ -76,7 +106,7 @@ const handleRequest = async (
   /**
    * @type {import(".").NodeFetchArgs}
    */
-  let proxyRequestFetchArgs = [proxyUrl, proxyRequestOptions];
+  let proxyRequestFetchArgs = [proxyTargetUrl, proxyRequestOptions];
   if (overrides.proxyRequestArgs) {
     overrides.proxyRequestArgs(proxyRequestFetchArgs, interceptedRequest);
   }

@@ -1,15 +1,14 @@
 import { defineSahneConfig } from "sahne";
 
+const target = "http://localhost:8080";
+
 export default defineSahneConfig({
-  initialUrl: "http://localhost:8080",
+  initialUrl: target,
   interceptor: [
     {
-      target: "http://localhost:8080",
+      matchTarget: target,
       proxyTarget: "http://localhost:5173",
-    },
-    // {
-    //   target: "http://localhost:8080/test",
-    //   proxyTarget: "https://jsonplaceholder.typicode.com/todos/1",
-    // },
+      ignoreRequest: (req) => req.url().startsWith(`${target}/mock-api`),
+    }
   ],
 });
