@@ -35,15 +35,26 @@ export type UrlRewrite = (url: string) => string;
 export declare type SahneConfigs = {
   /**
    * The initial URL to navigate to.
+   * It must include protocol (eg. https://).
    * @default {SahneConfigs.target}
    */
   initialUrl: string;
   /**
-   * The proxy target URL without query params to intercept requests to.
+   * The proxy target where intercepted requests will be sent (proxied to).
+   * It must include protocol (eg. https://).
+   * It can have port and path but it should not have query params.
+   * @example https://example.com
+   * @example https://example.com:8080
+   * @example https://example.com/path/to/intercept
    */
   proxyTarget: string;
   /**
-   * The target URL without query params to intercept requests.
+   * URL to the target where requests will be intercepted. 
+   * It must include protocol (eg. https).
+   * It can have port and path but it should not have query params.
+   * @example https://example.com
+   * @example https://example.com:8080
+   * @example https://example.com/path/to/intercept
    */
   target: string;
   /**
