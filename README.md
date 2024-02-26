@@ -1,19 +1,19 @@
-# Sahne
+# SahneJS
 
 Sahne is a tool designed for testing and debugging. It uses Puppeteer's interceptor to implement a reverse proxy, allowing for local request manipulation within the browser.
 
 ## Installation
 
-To install `Sahne`, run the following command:
+To install `SahneJS`, run the following command:
 ```sh
 # Puppeteer is peer dependency
-npm install --save-dev puppeteer sahne
+npm install --save-dev puppeteer sahne-js
 ```
 
 A common scenario with SPA applications involves injecting development bundles into production bundles. Configurations should be provided through sahne.config.js, which is created in the root path of the project directory:
 
 ```js
-// sahne.config.js:
+// sahne.config.js, lets you easy access to types
 import { defineSahneConfig } from "sahne";
 
 // or with CommonJs
@@ -24,7 +24,7 @@ export default defineSahneConfig({
   initialUrl: "https://your-prod-site.com/home-page",
   interceptor: [
     {
-      target: "https://your-prod-site.com", // URLs start with this will match
+      matchTarget: "https://your-prod-site.com", // URLs start with this will match
       proxyTarget: "http://localhost:5173", // dev server URL
       ignoreRequest: (req) => req.url().startWith("https://your-prod-site.com/api")
     },
