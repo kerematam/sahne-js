@@ -1,5 +1,6 @@
 import logo from './logo.svg';
 import './App.css';
+import Todos from './Todos/Todos';
 
 function App() {
   return (
@@ -17,6 +18,8 @@ function App() {
         >
           Learn React
         </a>
+        <h1 style={{ color: "red" }}>This is Update from SahneJS</h1>
+        <Todos />
       </header>
     </div>
   );

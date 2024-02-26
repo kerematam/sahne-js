@@ -18,9 +18,9 @@ function App() {
         </a>
       </div>
       <h1>Vite + React</h1>
-      <h1 style={{ color: "red" }}>This is Update from SahneJs</h1>
+      <h1 style={{ color: "red" }}>This is Update from SahneJS</h1>
       <Todos />
-      {/* <h1 style={{ color: "red" }}>This is update from SahneJs</h1> */}
+      {/* <h1 style={{ color: "red" }}>This is update from SahneJS</h1> */}
       <div className="card">
         <button onClick={() => setCount((count) => count + 1)}>
           count is {count}
