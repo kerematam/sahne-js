@@ -1,4 +1,5 @@
 import puppeteer from "puppeteer";
+import { fetch } from "node-fetch-native";
 
 function getProxiedUrl(originalUrl, proxy) {
   const urlObj = new URL(originalUrl);
