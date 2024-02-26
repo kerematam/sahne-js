@@ -45,6 +45,7 @@ npx sahne
 
 To be able to use with HMR in Vite, you need to expose HMR socket seperately to escape target domain:
 
+
 ```js
 // https://vitejs.dev/config/
 export default defineConfig({
