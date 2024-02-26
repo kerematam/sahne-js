@@ -1,6 +1,10 @@
 import puppeteer from "puppeteer";
 import fetch from "node-fetch";
 
+/**
+ * @typedef {import('"puppeteer/lib/types.d.ts').PuppeteerLaunchOptions"} PuppeteerLaunchOptions
+ */
+
 function getProxiedUrl(originalUrl, proxy) {
   const urlObj = new URL(originalUrl);
   const pathWithQuery = urlObj.pathname + urlObj.search;
@@ -8,10 +12,23 @@ function getProxiedUrl(originalUrl, proxy) {
   return `${proxy}${pathWithQuery}`;
 }
 
+/**
+ * Runs the puppeteer script with the provided options.
+ *
+ * @param {Object} options - The options for running the script.
+ * @param {string} options.initialUrl - The initial URL to navigate to.
+ * @param {string} options.proxyTarget - The source origin for intercepting requests.
+ * @param {string} options.target - The target origin for intercepting requests.
+ * @param {Object} [options.interceptor] - The interceptor object for handling requests.
+ * @param {Object} [options.puppeteerOptions] - The options for puppeteer.
+ * @param {Object} [options.puppeteerOptions.goto] - The options for puppeteer's goto method.
+ * @param {PuppeteerLaunchOptions} [options.puppeteerOptions.launch] - The options for puppeteer's launch method.
+ * @returns {Promise<void>} - A promise that resolves when the script finishes running.
+ */
 const run = async ({
   initialUrl,
-  sourceOrigin,
-  targetOrigin,
+  proxyTarget,
+  target,
   interceptor = {},
   puppeteerOptions = {
     goto: {},
@@ -36,13 +53,13 @@ const run = async ({
 
     const url = interceptedRequest.url();
     const parsedTargetUrl = new URL(url);
-    if (parsedTargetUrl.origin !== targetOrigin) {
+    if (parsedTargetUrl.origin !== target) {
       interceptedRequest.continue();
       return;
     }
 
     try {
-      const proxyUrl = getProxiedUrl(interceptedRequest.url(), sourceOrigin);
+      const proxyUrl = getProxiedUrl(interceptedRequest.url(), proxyTarget);
       const proxyResponse = await fetch(proxyUrl, {
         method: interceptedRequest.method(),
         headers: interceptedRequest.headers(),
@@ -72,7 +89,7 @@ const run = async ({
     }
   });
 
-  await page.goto(initialUrl || targetOrigin, puppeteerOptions.goto);
+  await page.goto(initialUrl || target, puppeteerOptions.goto);
 };
 
 export default run;
