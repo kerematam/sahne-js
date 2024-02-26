@@ -1,5 +1,5 @@
 {
-  "name": "sahne",
+  "name": "sahne-js",
   "version": "1.0.0-rc0",
   "description": "",
   "main": "./src/index.mjs",
@@ -30,10 +30,6 @@
   },
   "files": [
     "cli.js",
-    "src",
-    "client.d.ts",
-    "index.cjs",
-    "index.d.cts",
-    "types"
+    "src"
   ]
 }
