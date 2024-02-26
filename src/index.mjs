@@ -1,20 +1,11 @@
 import puppeteer from "puppeteer";
-import { fetch } from "node-fetch-native";
+import fetch from "node-fetch";
 
 function getProxiedUrl(originalUrl, proxy) {
   const urlObj = new URL(originalUrl);
   const pathWithQuery = urlObj.pathname + urlObj.search;
 
   return `${proxy}${pathWithQuery}`;
-}
-
-function mapHeadersToObject(map) {
-  let object = {};
-  for (let [key, value] of map.entries()) {
-    object[key] = value;
-  }
-
-  return object;
 }
 
 const run = async ({
@@ -31,7 +22,6 @@ const run = async ({
     defaultViewport: null,
     headless: false,
     ...puppeteerOptions.launch,
-    // args: ["--disable-web-security", "--ignore-certificate-errors"],
   });
 
   const page = await browser.newPage();
@@ -41,11 +31,7 @@ const run = async ({
   page.on("request", async (interceptedRequest) => {
     if (interceptor.preHandling) {
       await interceptor.preHandling(interceptedRequest);
-
-      if (interceptedRequest.isInterceptResolutionHandled()) {
-        console.log("isInterceptResolutionHandled");
-        return;
-      }
+      if (interceptedRequest.isInterceptResolutionHandled()) return;
     }
 
     const url = interceptedRequest.url();
@@ -63,18 +49,24 @@ const run = async ({
         body: interceptedRequest.postData(),
       });
       const responseBody = await proxyResponse.arrayBuffer();
-      const responseHeaders = mapHeadersToObject(proxyResponse.headers);
+      const responseHeaders = proxyResponse.headers.raw();
 
-      if (proxyResponse.status !== 200) {
-        interceptedRequest.continue();
+      // TODO: study here
+      if (
+        proxyResponse.status === 200 ||
+        proxyResponse.ok ||
+        proxyResponse.status === 304
+      ) {
+        await interceptedRequest.respond({
+          status: proxyResponse.status,
+          headers: responseHeaders,
+          body: Buffer.from(responseBody),
+        });
+
         return;
       }
 
-      await interceptedRequest.respond({
-        status: proxyResponse.status,
-        headers: responseHeaders,
-        body: Buffer.from(responseBody),
-      });
+      interceptedRequest.continue();
     } catch (e) {
       interceptedRequest.continue();
     }
