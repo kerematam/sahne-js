@@ -1,6 +1,6 @@
 {
   "name": "sahne",
-  "version": "1.0.0-rc15",
+  "version": "1.0.0-rc0",
   "description": "",
   "main": "./src/index.mjs",
   "types": "./src/index.d.ts",

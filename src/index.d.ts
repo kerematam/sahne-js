@@ -1,14 +1,23 @@
 import type { RequestInfo } from "node-fetch";
 import type { RequestInit, Response } from "node-fetch";
 import type {
-  ResponseForRequest,
-  PuppeteerLaunchOptions,
   HTTPRequest,
+  PuppeteerLaunchOptions,
+  ResponseForRequest,
 } from "puppeteer";
 import type { GoToOptions } from "puppeteer";
 
 export type NodeFetchFirstArg = URL | RequestInfo;
-export type NodeFetchArgs = [NodeFetchFirstArg, RequestInit];
+
+export type NodeFetchArgs = [
+  NodeFetchFirstArg,
+  // TODO: re-think overriding approach here
+  Omit<RequestInit, "body" | "headers" | "method"> & {
+    body: string | undefined;
+    headers: Record<string, string>;
+    method: string;
+  }
+];
 
 export type PuppeteerRespondArgs = [
   response: ResponseForRequest,
@@ -57,7 +66,7 @@ export interface Interceptor {
    * @example https://example.com:8080
    * @example https://example.com/path/to/intercept
    */
-  matchTarget: string | MatchTargetFunction;
+  matchTarget?: string | MatchTargetFunction;
   /**
    * Function to rewrite the URL before sending the request to the proxy target.
    * @param {string} requestUrl - The intercepted request URL.

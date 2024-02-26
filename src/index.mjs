@@ -18,6 +18,10 @@ export const defineSahneConfig = (options) => options;
 const checkIsMatched = (interceptedRequest, matchTarget) => {
   const requestUrlString = interceptedRequest.url();
 
+  if(typeof matchTarget === undefined) {
+    return false
+  }
+
   if (typeof matchTarget === "function") {
     return matchTarget(requestUrlString, interceptedRequest);
   }
