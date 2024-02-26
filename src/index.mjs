@@ -1,3 +1,4 @@
+// @ts-check
 import puppeteer from "puppeteer";
 import fetch from "node-fetch";
 
@@ -30,6 +31,7 @@ const checkShouldProxied = (reqUrl, targetUrl) => {
 };
 
 /**
+ * Request handler
  * @param {import("puppeteer").HTTPRequest} interceptedRequest
  * @param {import(".").Interceptor} interceptConfigs
  * @returns {Promise<void>}
@@ -38,8 +40,11 @@ const handleRequest = async (
   interceptedRequest,
   {
     onRequest,
-    proxyTarget,
-    target,
+    // TODO change to function | string
+    proxyTarget = "",
+    // TODO: matchTarget
+    // TODO change to function | string
+    target = "",
     urlRewrite,
     overrides = {},
     ignoreRequest,
@@ -60,20 +65,25 @@ const handleRequest = async (
   if (!shouldProxied) return;
 
   let proxyUrl = urlRewrite
-    ? urlRewrite(requestUrlString, proxyTarget)
+    ? urlRewrite(requestUrlString)
     : requestUrlString.replace(target, proxyTarget);
+
   let proxyRequestOptions = {
     method: interceptedRequest.method(),
     headers: interceptedRequest.headers(),
     body: interceptedRequest.postData(),
   };
+  /**
+   * @type {import(".").NodeFetchArgs}
+   */
   let proxyRequestFetchArgs = [proxyUrl, proxyRequestOptions];
   if (overrides.proxyRequestArgs) {
-    overrides.proxyRequestArgs(proxyRequestParams, interceptedRequest);
+    overrides.proxyRequestArgs(proxyRequestFetchArgs, interceptedRequest);
   }
 
+  let proxyResponse;
   try {
-    const proxyResponse = await fetch(...proxyRequestFetchArgs);
+    proxyResponse = await fetch(...proxyRequestFetchArgs);
     const responseBody = await proxyResponse.arrayBuffer();
     const responseHeaders = proxyResponse.headers.raw();
 
@@ -91,9 +101,13 @@ const handleRequest = async (
         status: proxyResponse.status,
         headers: responseHeaders,
         body: Buffer.from(responseBody),
-        contentType: proxyResponse.headers.get("content-type"),
+        contentType: proxyResponse.headers.get("content-type") || "",
       };
-      let proxyResponsePuppeteerArgs = [response];
+
+      /**
+       * @type {import(".").PuppeteerRespondArgs}
+       */
+      const proxyResponsePuppeteerArgs = [response, 1];
       if (overrides.proxyResponseArgs) {
         overrides.proxyResponseArgs(
           proxyResponsePuppeteerArgs,
@@ -101,14 +115,12 @@ const handleRequest = async (
           proxyResponse
         );
       }
-
       await interceptedRequest.respond(...proxyResponsePuppeteerArgs);
 
       return;
     }
-
   } catch (e) {
-    interceptedRequest.continue();
+    console.log("e", e);
   }
 };
 
@@ -135,12 +147,17 @@ const run = async ({
   await page.setRequestInterception(true);
 
   const allConfigs = Array.isArray(interceptor) ? interceptor : [interceptor];
-  for (const config of allConfigs) {
-    page.on("request", (interceptedRequest) => {
+
+  page.on("request", async (interceptedRequest) => {
+    for (const config of allConfigs) {
       if (interceptedRequest.isInterceptResolutionHandled()) return;
-      handleRequest(interceptedRequest, config);
-    });
-  }
+      await handleRequest(interceptedRequest, config);
+    }
+
+    if (!interceptedRequest.isInterceptResolutionHandled()) {
+      interceptedRequest.continue();
+    }
+  });
 
   await page.goto(initialUrl, puppeteerOptions.goto);
 };

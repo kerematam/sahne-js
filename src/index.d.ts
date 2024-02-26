@@ -9,21 +9,11 @@ import type { GoToOptions } from "puppeteer";
 
 export type NodeFetchFirstArg = URL | RequestInfo;
 export type NodeFetchArgs = [NodeFetchFirstArg, RequestInit];
-export type ProxyRequestOverrideArgs = (
-  args: NodeFetchArgs,
-  interceptedRequest: HTTPRequest
-) => void;
 
 export type PuppeteerRespondArgs = [
   response: ResponseForRequest,
-  priority?: number
+  priority?: number | undefined
 ];
-
-// export type ProxyResponseOverrideArgs = {
-//   args: PuppeteerRespondArgs;
-//   interceptedRequest: HTTPRequest;
-//   nodeFetchResponse: Response;
-// };
 
 /**
  * Represents an interceptor configuration.
@@ -71,7 +61,10 @@ export interface Interceptor {
      * @param {HTTPRequest} interceptedRequest
      * @returns {void}
      */
-    proxyRequestArgs?: (args, interceptedRequest) => void;
+    proxyRequestArgs?: (
+      args: NodeFetchArgs,
+      interceptedRequest: HTTPRequest
+    ) => void;
     /**
      * Override proxy response arguments to be supplied to Puppeteer's respond method.
      *
@@ -116,9 +109,8 @@ export declare interface SahneConfigs {
   /**
    * The initial URL to navigate to.
    * It must include protocol (eg. https://).
-   * @default {SahneConfigs.target}
    */
-  initialUrl?: string;
+  initialUrl: string;
   /**
    * Additional puppeteer options.
    */
@@ -135,7 +127,7 @@ export declare interface SahneConfigs {
   /**
    * The interceptors to be used for the Sahne instance.
    */
-  interceptor?: Interceptor | Interceptor[];
+  interceptor: Interceptor | Interceptor[];
 }
 
 /**
