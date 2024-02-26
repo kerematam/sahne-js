@@ -1,10 +1,11 @@
 {
   "name": "sahne",
-  "version": "1.0.0-rc0",
+  "version": "1.0.0-rc11",
   "description": "",
-  "main": "index.js",
+  "main": "./src/index.mjs",
+  "types": "./src/index.d.ts",
   "peerDependencies": {
-    "puppeteer": "^21.7.0"
+    "puppeteer": "^22.0.0 || ^21.0.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -12,11 +13,19 @@
   "bin": {
     "sahne": "./cli.js"
   },
-  "author": "",
+  "author": "Kerem ATAM",
   "license": "ISC",
   "dependencies": {
     "@web/config-loader": "^0.3.1",
     "commander": "^11.1.0",
     "node-fetch": "^3.3.2"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.mjs",
+      "require": "./src/index.cjs"
+    },
+    "./package.json": "./package.json"
   }
 }

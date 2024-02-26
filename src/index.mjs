@@ -2,40 +2,53 @@ import puppeteer from "puppeteer";
 import fetch from "node-fetch";
 
 /**
- * @typedef {import('"puppeteer/lib/types.d.ts').PuppeteerLaunchOptions"} PuppeteerLaunchOptions
+ * defines configuratiosn for the sahne runner
+ * @param {import(".").SahneConfigs} options
+ * @returns {import(".").SahneConfigs}
  */
+export const defineSahneConfig = (options) => options;
 
-/**
- * Runs the puppeteer script with the provided options.
- *
- * @param {Object} options - The options for running the script.
- * @param {string} options.initialUrl - The initial URL to navigate to.
- * @param {string} options.proxyTarget - The source origin for intercepting requests.
- * @param {string} options.target - The target origin for intercepting requests.
- * @param {Function} [options.urlRewrite] - The function for rewriting URLs.
- * @param {Object} [options.puppeteerOptions] - The options for puppeteer.
- * @param {Object} [options.puppeteerOptions.goto] - The options for puppeteer's goto method.
- * @param {PuppeteerLaunchOptions} [options.puppeteerOptions.launch] - The options for puppeteer's launch method.
- * @param {Function} [options.onRequest] - The function to run when a request is intercepted.
- * @param {Object} [options.overrides] - The overrides for the request and response handling.
- * @param {Function} [options.overrides.proxyRequestFetchArgs] - The function to override the proxy request fetch arguments.
- * @param {Function} [options.overrides.proxyResponsePuppeteerArgs] - The function to override the proxy response puppeteer arguments.
+const checkShouldProxied = (reqUrl, targetUrl) => {
+  // INFO: optimistic check for perfornace reasons
+  if (!reqUrl.startsWith(targetUrl)) return false;
+
+  /**
+   * INFO: Intercepted request URL with ports might return false positive
+   * with above condition when targetUrl does not have a port.
+   *
+   * Example:
+   * const targetUrl = "https://example.com"
+   * const reqUrl = "https://example.com:3000"
+   *
+   * So we need to make sure that ports are matching.
+   */
+  const reqUrlInstance = new URL(reqUrl);
+  const targetUrlInstance = new URL(targetUrl);
+  if (reqUrlInstance.port !== targetUrlInstance.port) return false;
+
+  return true;
+};
+
+/** *
+ * @param {import(".").SahneConfigs} options
  * @returns {Promise<void>} - A promise that resolves when the script finishes running.
  */
 const run = async ({
   initialUrl,
-  proxyTarget,
-  target,
-  urlRewrite,
-  onRequest,
-  overrides = {
-    proxyRequestFetchArgs: undefined,
-    proxyResponsePuppeteerArgs: undefined,
-  },
   puppeteerOptions = {
     goto: {},
     launch: {},
   },
+  onRequest,
+  proxyTarget,
+  target,
+  urlRewrite,
+  overrides = {
+    proxyRequestArgs: undefined,
+    proxyResponseArgs: undefined,
+  },
+  ignoreRequest,
+  ignoreRequestAfterProxyResponse,
 }) => {
   const browser = await puppeteer.launch({
     defaultViewport: null,
@@ -54,7 +67,11 @@ const run = async ({
     }
 
     const requestUrlString = interceptedRequest.url();
-    const shouldProxied = requestUrlString.startsWith(target);
+    let shouldProxied = checkShouldProxied(requestUrlString, target);
+    if (ignoreRequest) {
+      shouldProxied = !ignoreRequest(interceptedRequest, !shouldProxied);
+    }
+
     if (!shouldProxied) {
       interceptedRequest.continue();
       return;
@@ -74,18 +91,23 @@ const run = async ({
         body: interceptedRequest.postData(),
       };
       let proxyRequestFetchArgs = [proxyUrl, proxyRequestOptions];
-      if (overrides.proxyRequesFetchArgs) {
-        overrideProxyRequestArgs(proxyRequestParams, interceptedRequest);
+      if (overrides.proxyRequestArgs) {
+        overrides.proxyRequestArgs(proxyRequestParams, interceptedRequest);
       }
       const proxyResponse = await fetch(...proxyRequestFetchArgs);
       const responseBody = await proxyResponse.arrayBuffer();
       const responseHeaders = proxyResponse.headers.raw();
 
-      if (
-        proxyResponse.status === 200 ||
-        proxyResponse.ok ||
-        proxyResponse.status === 304
-      ) {
+      const internalRespondCondition = proxyResponse.status !== 404;
+      const respondCondition = ignoreRequestAfterProxyResponse
+        ? !ignoreRequestAfterProxyResponse(
+            proxyResponse,
+            interceptedRequest,
+            !internalRespondCondition
+          )
+        : internalRespondCondition;
+
+      if (respondCondition) {
         let response = {
           status: proxyResponse.status,
           headers: responseHeaders,
@@ -93,8 +115,8 @@ const run = async ({
           contentType: proxyResponse.headers.get("content-type"),
         };
         let proxyResponsePuppeteerArgs = [response];
-        if (overrides.proxyResponsePuppeteerArgs) {
-          overrideProxyResponsePuppeteerArgs(
+        if (overrides.proxyResponseArgs) {
+          overrides.proxyResponseArgs(
             proxyResponsePuppeteerArgs,
             interceptedRequest,
             proxyResponse
@@ -108,6 +130,7 @@ const run = async ({
 
       interceptedRequest.continue();
     } catch (e) {
+      console.log("e", e);
       interceptedRequest.continue();
     }
   });
