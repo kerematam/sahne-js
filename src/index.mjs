@@ -29,6 +29,94 @@ const checkShouldProxied = (reqUrl, targetUrl) => {
   return true;
 };
 
+/**
+ *
+ * @param {import(".").HTTPRequest} interceptedRequest
+ * @param {import(".").Interceptor} interceptConfigs
+ * @returns {Promise<void>}
+ */
+const handleRequest = async (
+  interceptedRequest,
+  {
+    onRequest,
+    proxyTarget,
+    target,
+    urlRewrite,
+    overrides = {},
+    ignoreRequest,
+    ignoreRequestAfterProxyResponse,
+  }
+) => {
+  if (onRequest) {
+    await onRequest(interceptedRequest);
+    if (interceptedRequest.isInterceptResolutionHandled()) return;
+  }
+
+  const requestUrlString = interceptedRequest.url();
+  let shouldProxied = checkShouldProxied(requestUrlString, target);
+  if (ignoreRequest) {
+    shouldProxied = !ignoreRequest(interceptedRequest, !shouldProxied);
+  }
+
+  if (!shouldProxied) return;
+
+  let proxyUrl = urlRewrite
+    ? urlRewrite(requestUrlString, proxyTarget)
+    : requestUrlString.replace(target, proxyTarget);
+  let proxyRequestOptions = {
+    method: interceptedRequest.method(),
+    headers: interceptedRequest.headers(),
+    body: interceptedRequest.postData(),
+  };
+  let proxyRequestFetchArgs = [proxyUrl, proxyRequestOptions];
+  if (overrides.proxyRequestArgs) {
+    overrides.proxyRequestArgs(proxyRequestParams, interceptedRequest);
+  }
+
+  try {
+    const proxyResponse = await fetch(...proxyRequestFetchArgs);
+    const responseBody = await proxyResponse.arrayBuffer();
+    const responseHeaders = proxyResponse.headers.raw();
+
+    
+    const internalRespondCondition = proxyResponse.status !== 404;
+    const respondCondition = ignoreRequestAfterProxyResponse
+      ? !ignoreRequestAfterProxyResponse(
+          proxyResponse,
+          interceptedRequest,
+          !internalRespondCondition
+        )
+      : internalRespondCondition;
+
+    if (respondCondition) {
+      let response = {
+        status: proxyResponse.status,
+        headers: responseHeaders,
+        body: Buffer.from(responseBody),
+        contentType: proxyResponse.headers.get("content-type"),
+      };
+      let proxyResponsePuppeteerArgs = [response];
+      if (overrides.proxyResponseArgs) {
+        overrides.proxyResponseArgs(
+          proxyResponsePuppeteerArgs,
+          interceptedRequest,
+          proxyResponse
+        );
+      }
+
+      await interceptedRequest.respond(...proxyResponsePuppeteerArgs);
+
+      return;
+    }
+
+    // interceptedRequest.continue();
+  } catch (e) {
+    
+    console.log("Proxy request failure", e);
+    interceptedRequest.continue();
+  }
+};
+
 /** *
  * @param {import(".").SahneConfigs} options
  * @returns {Promise<void>} - A promise that resolves when the script finishes running.
@@ -49,6 +137,7 @@ const run = async ({
   },
   ignoreRequest,
   ignoreRequestAfterProxyResponse,
+  interceptors = [],
 }) => {
   const browser = await puppeteer.launch({
     defaultViewport: null,
@@ -60,80 +149,23 @@ const run = async ({
   await page.setViewport({ width: 0, height: 0 });
   await page.setRequestInterception(true);
 
-  page.on("request", async (interceptedRequest) => {
-    if (onRequest) {
-      await onRequest(interceptedRequest);
+  const firstConfig = {
+    onRequest,
+    target,
+    proxyTarget,
+    urlRewrite,
+    overrides,
+    ignoreRequest,
+    ignoreRequestAfterProxyResponse,
+  };
+  const allConfigs = [firstConfig, ...interceptors];
+
+  for (const config of allConfigs) {
+    page.on("request", (interceptedRequest) => {
       if (interceptedRequest.isInterceptResolutionHandled()) return;
-    }
-
-    const requestUrlString = interceptedRequest.url();
-    let shouldProxied = checkShouldProxied(requestUrlString, target);
-    if (ignoreRequest) {
-      shouldProxied = !ignoreRequest(interceptedRequest, !shouldProxied);
-    }
-
-    if (!shouldProxied) {
-      interceptedRequest.continue();
-      return;
-    }
-
-    try {
-      let proxyUrl;
-      if (urlRewrite) {
-        proxyUrl = urlRewrite(requestUrlString, proxyTarget);
-      } else {
-        proxyUrl = requestUrlString.replace(target, proxyTarget);
-      }
-
-      let proxyRequestOptions = {
-        method: interceptedRequest.method(),
-        headers: interceptedRequest.headers(),
-        body: interceptedRequest.postData(),
-      };
-      let proxyRequestFetchArgs = [proxyUrl, proxyRequestOptions];
-      if (overrides.proxyRequestArgs) {
-        overrides.proxyRequestArgs(proxyRequestParams, interceptedRequest);
-      }
-      const proxyResponse = await fetch(...proxyRequestFetchArgs);
-      const responseBody = await proxyResponse.arrayBuffer();
-      const responseHeaders = proxyResponse.headers.raw();
-
-      const internalRespondCondition = proxyResponse.status !== 404;
-      const respondCondition = ignoreRequestAfterProxyResponse
-        ? !ignoreRequestAfterProxyResponse(
-            proxyResponse,
-            interceptedRequest,
-            !internalRespondCondition
-          )
-        : internalRespondCondition;
-
-      if (respondCondition) {
-        let response = {
-          status: proxyResponse.status,
-          headers: responseHeaders,
-          body: Buffer.from(responseBody),
-          contentType: proxyResponse.headers.get("content-type"),
-        };
-        let proxyResponsePuppeteerArgs = [response];
-        if (overrides.proxyResponseArgs) {
-          overrides.proxyResponseArgs(
-            proxyResponsePuppeteerArgs,
-            interceptedRequest,
-            proxyResponse
-          );
-        }
-
-        await interceptedRequest.respond(...proxyResponsePuppeteerArgs);
-
-        return;
-      }
-
-      interceptedRequest.continue();
-    } catch (e) {
-      console.log("e", e);
-      interceptedRequest.continue();
-    }
-  });
+      handleRequest(interceptedRequest, config);
+    });
+  }
 
   await page.goto(initialUrl || target, puppeteerOptions.goto);
 };
