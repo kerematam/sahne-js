@@ -1,0 +1,22 @@
+{
+	"name": "sahne-js",
+	"version": "1.0.0-rc.0",
+	"description": "Sahne is a tool designed for testing and debugging. It uses Puppeteer's interceptor to implement a reverse proxy, allowing for local request manipulation within the browser.",
+	"main": "index.js",
+	"directories": {
+		"doc": "docs"
+	},
+	"devDependencies": {
+		"@typescript-eslint/eslint-plugin": "^7.1.0",
+		"@typescript-eslint/parser": "^7.1.0",
+		"eslint": "^8.3.0",
+		"prettier": "^2.4.1"
+	},
+	"scripts": {
+    "lint": "prettier --check ./packages/sahne/**/* && eslint ./packages/sahne/src",
+		"format": "prettier --write ./packages/sahne/**/*",
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"author": "Kerem ATAM",
+	"license": "MIT"
+}

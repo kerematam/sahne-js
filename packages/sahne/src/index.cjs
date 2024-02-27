@@ -1,1 +1,1 @@
-module.exports.defineSahneConfig = (config) => config
+module.exports.defineSahneConfig = (config) => config;
