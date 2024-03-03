@@ -100,7 +100,7 @@ const handleRequest = async (
 		headers: interceptedRequest.headers(),
 		body: interceptedRequest.postData()
 	};
-	
+
 	/**
 	 * @type {import(".").NodeFetchArgs}
 	 */
