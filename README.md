@@ -21,9 +21,6 @@ A common scenario with SPA applications involves injecting development bundles i
 // sahne.config.js, lets you easy access to types
 import { defineSahneConfig } from "sahne";
 
-// or with CommonJs
-// const { defineSahneConfig } = require("sahne")
-
 export default defineSahneConfig({
   // initial URL to visit on load
   initialUrl: "https://your-prod-site.com/home-page",
@@ -36,6 +33,24 @@ export default defineSahneConfig({
   ],
 });
 ```
+
+For CommonJS:
+```js
+const { defineSahneConfig } = require("sahne")
+
+module.exports = defineSahneConfig({
+  // initial URL to visit on load
+  initialUrl: "https://your-prod-site.com/home-page",
+  interceptor: [
+    {
+      matchTarget: "https://your-prod-site.com", // URLs start with this will match
+      proxyTarget: "http://localhost:5173", // dev server URL
+      ignoreRequest: (req) => req.url().startWith("https://your-prod-site.com/api")
+    },
+  ],
+})
+```
+
 You may trigger the tool with below command. Ensure that proxy server is running.
 ```sh
 # Initilize the tool:
