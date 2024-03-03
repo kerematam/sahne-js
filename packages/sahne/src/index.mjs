@@ -88,13 +88,7 @@ const handleRequest = async (
 		if (interceptedRequest.isInterceptResolutionHandled()) return;
 	}
 
-	// if (
-	//   typeof matchTarget === "function" &&
-	//   !matchTarget(interceptedRequest.url(), interceptedRequest)
-	// ) {
-	//   return;
-	// }
-
+	if (!matchTarget || !proxyTarget) return;
 	const isMatched = checkIsMatched(interceptedRequest, matchTarget);
 	if (!isMatched) return;
 	if (ignoreRequest && ignoreRequest(interceptedRequest)) return;

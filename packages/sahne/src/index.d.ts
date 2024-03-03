@@ -1,3 +1,4 @@
+// @ts-check
 import type { RequestInfo } from 'node-fetch';
 import type { RequestInit, Response } from 'node-fetch';
 import type { HTTPRequest, PuppeteerLaunchOptions, ResponseForRequest } from 'puppeteer';
@@ -23,14 +24,14 @@ export type PuppeteerRespondArgs = [response: ResponseForRequest, priority?: num
  * @param {HTTPRequest} request - The intercepted request.
  * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
  */
-export declare function MatchTargetFunction(url: string, request: HTTPRequest): boolean;
+export type MatchTargetFunction = (url: string, request: HTTPRequest) => boolean;
 
 /**
  * Function that determines the proxy target URL for the intercepted request.
  * @param {string} url - The URL of the intercepted request.
  * @param {HTTPRequest} request - The intercepted request (from Puppeteer).
  */
-export declare function ProxyTargetFunction(url: string, request: HTTPRequest): string;
+export type ProxyTargetFunction = (url: string, request: HTTPRequest) => string;
 
 /**
  * Represents an interceptor configuration.
