@@ -1,6 +1,6 @@
 import { defineSahneConfig } from "sahne";
 
-const target = "http://localhost:8080";
+const target = "http://localhost:4173";
 
 export default defineSahneConfig({
   initialUrl: target,
