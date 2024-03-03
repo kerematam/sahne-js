@@ -100,6 +100,7 @@ const handleRequest = async (
 		headers: interceptedRequest.headers(),
 		body: interceptedRequest.postData()
 	};
+	
 	/**
 	 * @type {import(".").NodeFetchArgs}
 	 */
@@ -165,7 +166,7 @@ const run = async ({
 		...puppeteerOptions.launch
 	});
 
-	const page = await browser.newPage();
+	const [page] = await browser.pages();
 	await page.setViewport({ width: 0, height: 0 });
 	await page.setRequestInterception(true);
 
