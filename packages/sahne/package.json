@@ -1,6 +1,6 @@
 {
   "name": "sahne-js",
-  "version": "1.0.0-rc0",
+  "version": "1.0.0-rc.2",
   "description": "",
   "main": "./src/index.mjs",
   "types": "./src/index.d.ts",
