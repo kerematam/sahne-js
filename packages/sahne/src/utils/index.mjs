@@ -79,6 +79,8 @@ const handleAction = async ({ name, conditionFn, params, action }) => {
 		}
 
 		if (result) await action(params);
+
+		return;
 	}
 
 	throw new Error(`${name} is not a function. It is ${typeof conditionFn}.`);
