@@ -1,127 +1,12 @@
-// @ts-check
-import type { RequestInfo } from 'node-fetch';
 import type { RequestInit, Response } from 'node-fetch';
 import type { HTTPRequest, PuppeteerLaunchOptions, ResponseForRequest } from 'puppeteer';
 import type { GoToOptions } from 'puppeteer';
 
-export type NodeFetchFirstArg = URL | RequestInfo;
+import type { URL } from 'url';
 
-export type NodeFetchArgs = [
-	NodeFetchFirstArg,
-	// TODO: re-think overriding approach here
-	Omit<RequestInit, 'body' | 'headers' | 'method'> & {
-		body: string | undefined;
-		headers: Record<string, string>;
-		method: string;
-	}
-];
+export type Match = string | RegExp | ((url: URL, request: HTTPRequest) => boolean);
 
-export type PuppeteerRespondArgs = [response: ResponseForRequest, priority?: number | undefined];
-
-/**
- * Function that determines whether a request should be intercepted or not.
- * @param {string} url - The URL of the intercepted request.
- * @param {HTTPRequest} request - The intercepted request.
- * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
- */
-export type MatchTargetFunction = (url: string, request: HTTPRequest) => boolean;
-
-/**
- * Function that determines the proxy target URL for the intercepted request.
- * @param {string} url - The URL of the intercepted request.
- * @param {HTTPRequest} request - The intercepted request (from Puppeteer).
- */
-export type ProxyTargetFunction = (url: string, request: HTTPRequest) => string;
-
-/**
- * Represents an interceptor configuration.
- */
-export interface Interceptor {
-	/**
-	 * The proxy target where intercepted requests will be sent (proxied to).
-	 * It must include protocol (eg. https://).
-	 * It can have port and path but it should not have query params.
-	 * @example https://example.com
-	 * @example https://example.com:8080
-	 * @example https://example.com/path/to/intercept
-	 */
-	proxyTarget?: string | ProxyTargetFunction;
-	/**
-	 * URL to the target where requests will be intercepted.
-	 * It must include protocol (eg. https).
-	 * It can have port and path but it should not have query params.
-	 * @example https://example.com
-	 * @example https://example.com:8080
-	 * @example https://example.com/path/to/intercept
-	 */
-	matchTarget?: string | MatchTargetFunction;
-	/**
-	 * Function to rewrite the URL before sending the request to the proxy target.
-	 * @param {string} requestUrl - The intercepted request URL.
-	 * @returns {string} proxyTargetUrl - The rewritten URL to be sent to the proxy target.
-	 */
-	urlRewrite?: (requestUrl: string) => string;
-	/**
-	 * Intercept and handle directly with Puppeteer's request API. This is called
-	 * before handling of any other rules.
-	 * @link https://pptr.dev/guides/request-interception
-	 *
-	 * @param {HTTPRequest} intercepted - Puppeteer's Request instance
-	 * @returns {void}
-	 */
-	onRequest?: (request: HTTPRequest) => void;
-	/**
-	 * The overrides for the request and response handling.
-	 */
-	overrides?: {
-		/**
-		 * Override proxy request arguments to be supplied to node-fetch's fetch method.
-		 * @param {NodeFetchArgs} args
-		 * @param {HTTPRequest} interceptedRequest
-		 * @returns {void}
-		 */
-		proxyRequestArgs?: (args: NodeFetchArgs, interceptedRequest: HTTPRequest) => void;
-		/**
-		 * Override proxy response arguments to be supplied to Puppeteer's respond method.
-		 *
-		 * @param {PuppeteerRespondArgs} args - puppeteer response arguments
-		 * @param {HTTPRequest} interceptedRequest - puppeteer intercepted request
-		 * @param {Response} nodeFetchResponse - node-fetch response
-		 * @returns {void}
-		 *
-		 * @example
-		 * proxyResponseArgs([response]) {
-		 *   response.headers["X-Intercepted-By"] = "sahne";
-		 * }
-		 */
-		proxyResponseArgs?: (
-			args: PuppeteerRespondArgs,
-			interceptedRequest: HTTPRequest,
-			nodeFetchResponse: Response
-		) => void;
-	};
-	/**
-	 * The function for ignoring requests to be intercepted.
-	 * @param {HTTPRequest} request - The intercepted request.
-	 * @param {boolean} isRequestIgnored - Internally evaluated ignore decision.
-	 * @returns {boolean}
-	 */
-	ignoreRequest?: (request: HTTPRequest) => boolean;
-	/**
-	 * The function for ignoring requests to be intercepted after proxy response.
-	 * @param {Response} proxyResponse - The node-fetch proxy response.
-	 * @param {HTTPRequest} interceptedRequest - The puppeteer intercepted request.
-	 * @param {boolean} isRequestIgnored - Internally evaluated ignore decision, happens when request returns with status code 404.
-	 * @returns {boolean}
-	 */
-	ignoreRequestAfterProxyResponse?: (
-		proxyResponse: Response,
-		interceptedRequest: HTTPRequest,
-		isRequestIgnored: boolean
-	) => boolean;
-}
-
-export declare interface SahneConfigs {
+export declare interface SahneConfig {
 	/**
 	 * The initial URL to navigate to.
 	 * It must include protocol (eg. https://).
@@ -134,21 +19,287 @@ export declare interface SahneConfigs {
 		/**
 		 * The options for Puppeteer's goto method.
 		 */
-		goto?: Partial<GoToOptions>;
+		goto?: GoToOptions;
 		/**
 		 * The options for Puppeteer's launch method.
 		 */
 		launch?: Partial<PuppeteerLaunchOptions>;
 	};
 	/**
-	 * The interceptors to be used for the Sahne instance.
+	 * The interceptor config to be used.
 	 */
-	interceptor: Interceptor | Interceptor[];
+	interceptor?: Config | Config[];
 }
 
+export type RequestHeaders = ReturnType<HTTPRequest['headers']>;
+export type RequestBody = ReturnType<HTTPRequest['postData']>;
+export type RequestMethod = ReturnType<HTTPRequest['method']>;
+
 /**
- * Defines configuratiosn for the sahne runner
- * @param {SahneConfigs} configs
- * @returns {SahneConfigs}
+ * Defines configurationS for the sahne runner
+ * @param {SahneConfig} configs
+ * @returns {SahneConfig}
  */
-export declare function defineSahneConfig(config: SahneConfigs): SahneConfigs;
+export declare function defineConfig(config: SahneConfig): SahneConfig;
+
+/**
+ * Represents a function that overrides request headers.
+ * @param {Record<string, string>} headers - The current set of request headers.
+ * @param {OverrideRequestAdditionalParams} additionalParams - Additional parameters.
+ * @returns {Record<string, string>} - The modified request headers.
+ */
+export type OverrideRequestHeadersFunction = (
+	headers: Record<string, string>,
+	additionalParams: OverrideRequestAdditionalParams
+) => RequestInit['headers'];
+
+/**
+ * Represents a function that overrides request body.
+ * @param {RequestBody} body - The current request body.
+ * @param {OverrideRequestAdditionalParams} additionalParams - Additional parameters.
+ * @returns {RequestBody} - The modified request body.
+ */
+export type OverrideRequestBodyFunction = (
+	body: RequestBody,
+	additionalParams: OverrideRequestAdditionalParams
+) => RequestInit['body'];
+
+export type RequestOptions = {
+	method: RequestMethod;
+	headers: Record<string, string>;
+	body: RequestBody;
+};
+
+export type OverrideRequesOptionsFunction = (
+	options: RequestOptions,
+	additionalParams: OverrideRequestAdditionalParams
+) => RequestInit;
+
+export type OverrideRequestAdditionalParams = {
+	proxyUrl: string;
+	request: HTTPRequest;
+};
+
+export type ResponseRaw = Response;
+
+export type OverrideResponseAdditionalParams = {
+	responseRaw: ResponseRaw;
+	response: ResponseForRequest;
+	request: HTTPRequest;
+};
+
+export type OverrideResponseHeadersFunction = (
+	headers: Record<string, string>,
+	addtionalParams: OverrideResponseAdditionalParams
+) => ResponseForRequest['headers'];
+
+export type OverrideResponseBodyFunction = (
+	body: Buffer,
+	addtionalParams: OverrideResponseAdditionalParams
+) => ResponseForRequest['body'];
+
+export type OverrideResponseObject = {
+	status: ResponseRaw['status'];
+	headers: ReturnType<RequestBody['headers']['raw']>;
+	body: Buffer;
+	contentType: string;
+};
+
+export type OverrideResponseOptionsFunction = (
+	options: OverrideResponseObject,
+	addtionalParams: OverrideResponseAdditionalParams
+) => ResponseForRequest;
+
+export type Action = {
+	abort: () => void;
+	respond: (params: ResponseForRequest) => void;
+	continue: () => void;
+	fallback: () => void;
+};
+
+export type OnRequestParams = {
+	/**
+	 * The request object.
+	 */
+	request: HTTPRequest;
+	/**
+	 * The action object.
+	 */
+	action: Action;
+	/**
+	 * The route object.
+	 */
+	url: URL;
+};
+
+export type OnResponseParams = {
+	/**
+	 * The response object.
+	 */
+	response: ResponseForRequest;
+	/**
+	 * The response object.
+	 */
+	responseRaw: any;
+	/**
+	 * The action object.
+	 */
+	action: Action;
+	/**
+	 * The request object.
+	 */
+	request: HTTPRequest;
+	/**
+	 * The route object.
+	 */
+	url: URL;
+};
+
+export type ActionOnResponseParams = {
+	/**
+	 * The response object.
+	 */
+	response: ResponseForRequest;
+	/**
+	 * The response object.
+	 */
+	responseRaw: Response;
+	/**
+	 * The request object.
+	 */
+	request: HTTPRequest;
+	/**
+	 * The route object.
+	 */
+	url: URL;
+};
+
+/**
+ * Configuration options for the Sahne package.
+ */
+export type Config = {
+	/**
+	 * A glob pattern, regex pattern or predicate receiving [URL] to match while
+	 * routing. When a `baseURL` via the context options was provided and the
+	 * passed URL is a path, it gets merged via the [`new
+	 * URL()`](https://developer.mozilla.org/en-US/docs/Web/API/URL/URL)
+	 * constructor.
+	 *
+	 */
+	match?: Match | Match[];
+	/**
+	 * A glob pattern, regex pattern or predicate receiving [URL] to match while
+	 * routing. When a `baseURL` via the context options was provided and the
+	 * passed URL is a path, it gets merged via the [`new
+	 * URL()`](https://developer.mozilla.org/en-US/docs/Web/API/URL/URL)
+	 * constructor.
+	 */
+	ignore?: Match | Match[];
+	/**
+	 * The proxy URL where intercepted requests will be sent (proxied to).
+	 * The path and query params will be mapped to the proxy target.
+	 * The query params will be appended to the proxy URL.
+	 *
+	 * @example https://example.com/prefix
+	 * @example https://example.com?param=value
+	 */
+	proxy?: string | Function;
+	/**
+	 * Rewrite the path before sending the request to the proxy target.
+	 * @param {string} path - The original path of the request.
+	 * @returns {string} - The rewritten path.
+	 */
+	pathRewrite?: (path: string) => string;
+	/**
+	 * Rewrite the URL before sending the request to the proxy target.
+	 * @param {string} url - The original URL of the request.
+	 * @returns {string} - The rewritten URL.
+	 */
+	urlRewrite?: (url: string) => string;
+	/**
+	 * The request method to be intercepted.
+	 * @param {OnRequestParams} params - Params to be passed to the function.
+	 * @param {Action} params.action - Avaliable actions that can be called.
+	 * @param {Request} params.request - The intercepted request.
+	 * @param {URL} params.url - The URL object of the intercepted request.
+	 * @returns {void} - Returns void.
+	 */
+	onRequest?: (param: OnRequestParams) => void;
+	abort?: Match | Match[];
+	fallback?: Match | Match[];
+	/**
+	 * The response method to be intercepted.
+	 * @param {OnResponseParams} params - Puppeteer's APIResponse instance.
+	 * @param {OnResponseParams['action']} params.action - Avaliable actions that can be called.
+	 * @param {OnResponseParams['response']} params.response - The intercepted response.
+	 * @param {OnResponseParams['responseRaw']} params.responseRaw - The intercepted route.
+	 * @param {OnResponseParams['response']} params.request - The intercepted request.
+	 * @param {OnResponseParams['url']} params.url - The URL object of the intercepted request.
+	 * @returns {void} - Returns void.
+	 */
+	onResponse?: (params: OnResponseParams) => void;
+	/**
+	 * Intercepted request ignored (not intercepted) if the function returns true.
+	 * @param {ActionOnResponseParams} params params to be passed to the function
+	 * @param {ActionOnResponseParams['response'] } params.response - Puppeteer's APIResponse instance.
+	 * @param {ActionOnResponseParams['responseRaw']} params.responseRaw - The intercepted route.
+	 * @param {ActionOnResponseParams['request']} params.request - The intercepted request.
+	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
+	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
+	 */
+	ignoreOnResponse?: (params: ActionOnResponseParams) => boolean;
+	/**
+	 * Intercepted response aborted if the function returns true.
+	 * @param {ActionOnResponseParams} params params to be passed to the function
+	 * @param {ActionOnResponseParams['response']} params.response - Puppeteer's APIResponse instance.
+	 * @param {ActionOnResponseParams['responseRaw']} params.responseRaw - The intercepted route.
+	 * @param {ActionOnResponseParams['request']} params.request - The intercepted request.
+	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
+	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
+	 */
+	abortOnResponse?: (params: ActionOnResponseParams) => boolean;
+	/**
+	 * Intercepted response fallbacks to next interception rule if the function returns true.
+	 * @param {ActionOnResponseParams} params params to be passed to the function
+	 * @param {ActionOnResponseParams['response']} params.response - Puppeteer's APIResponse instance.
+	 * @param {ActionOnResponseParams['responseRaw']} params.responseRaw - The intercepted route.
+	 * @param {ActionOnResponseParams['request']} params.request - The intercepted request.
+	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
+	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
+	 */
+	fallbackOnResponse?: (params: ActionOnResponseParams) => boolean;
+	/**
+	 * Overrirde request headers to be passed to fetch method of NodeFetch
+	 */
+	overrideRequestHeaders?: OverrideRequestHeadersFunction;
+	/**
+	 * Overrirde request headers to be passed to fetch method of NodeFetch
+	 */
+	overrideRequestBody?:
+		| Partial<ReturnType<OverrideRequestBodyFunction>>
+		| OverrideRequestBodyFunction;
+	/**
+	 * Overrirde request headers to be passed to Puppeteer's fetch method
+	 */
+	overrideRequestOptions?:
+		| Partial<ReturnType<OverrideRequesOptionsFunction>>
+		| OverrideRequesOptionsFunction;
+	/**
+	 * Overrirde response headers to be passed to Puppeteer's respond method
+	 */
+	overrideResponseHeaders?:
+		| Partial<ReturnType<OverrideResponseHeadersFunction>>
+		| OverrideResponseHeadersFunction;
+	/**
+	 * Overrirde response headers to be passed to Puppeteer's respond method
+	 */
+	overrideResponseBody?:
+		| Partial<ReturnType<OverrideResponseBodyFunction>>
+		| OverrideResponseBodyFunction;
+	/**
+	 * Overide response options of Puppeteer's respond method
+	 */
+	overrideResponseOptions?:
+		| Partial<ReturnType<OverrideResponseOptionsFunction>>
+		| OverrideResponseOptionsFunction;
+};

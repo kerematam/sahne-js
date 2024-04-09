@@ -1,35 +1,35 @@
 {
-  "name": "sahne-js",
-  "version": "1.0.0-rc.2",
-  "description": "",
-  "main": "./src/index.mjs",
-  "types": "./src/index.d.ts",
-  "peerDependencies": {
-    "puppeteer": "^20.0.0 || ^21.0.0 || ^22.0.0"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "bin": {
-    "sahne": "./cli.js"
-  },
-  "author": "Kerem ATAM",
-  "license": "ISC",
-  "dependencies": {
-    "@web/config-loader": "^0.3.1",
-    "commander": "^11.1.0",
-    "node-fetch": "^3.3.2"
-  },
-  "exports": {
-    ".": {
-      "types": "./src/index.d.ts",
-      "import": "./src/index.mjs",
-      "require": "./src/index.cjs"
-    },
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "cli.js",
-    "src"
-  ]
+	"name": "sahne-js",
+	"version": "1.0.0-rc.3",
+	"description": "",
+	"main": "./src/index.mjs",
+	"types": "./src/index.d.ts",
+	"peerDependencies": {
+		"puppeteer": "^20.0.0 || ^21.0.0 || ^22.0.0"
+	},
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"bin": {
+		"sahne": "./cli.js"
+	},
+	"author": "Kerem ATAM",
+	"license": "ISC",
+	"dependencies": {
+		"@web/config-loader": "^0.3.1",
+		"commander": "^11.1.0",
+		"node-fetch": "^3.3.2"
+	},
+	"exports": {
+		".": {
+			"types": "./src/index.d.ts",
+			"import": "./src/index.mjs",
+			"require": "./src/index.cjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"cli.js",
+		"src"
+	]
 }
