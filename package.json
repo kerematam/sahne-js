@@ -1,7 +1,7 @@
 {
 	"name": "sahne-js",
 	"version": "1.0.0-rc.2",
-	"description": "Sahne is a tool designed for testing and debugging. It uses Puppeteer's interceptor to implement a reverse proxy, allowing for local request manipulation within the browser.",
+	"description": "A tool designed for testing and debugging that uses Puppeteer's interceptor to proxy the desired requests to an internal development server from any specified URL.",
 	"main": "index.js",
 	"directories": {
 		"doc": "docs"

@@ -1,7 +1,18 @@
 {
 	"name": "sahne-js",
 	"version": "1.0.0-rc.3",
-	"description": "",
+	"description": "A tool designed for testing and debugging that uses Puppeteer's interceptor to proxy the desired requests to an internal development server from any specified URL.",
+	"keywords": [
+		"sahne",
+		"sahne-js",
+		"puppeteer",
+		"debug",
+		"test"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kerematam/sahne-js"
+	},
 	"main": "./src/index.mjs",
 	"types": "./src/index.d.ts",
 	"peerDependencies": {
@@ -27,6 +38,9 @@
 			"require": "./src/index.cjs"
 		},
 		"./package.json": "./package.json"
+	},
+	"engines": {
+		"node": ">=18"
 	},
 	"files": [
 		"cli.js",
