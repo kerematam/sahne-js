@@ -2,154 +2,122 @@
 import puppeteer from 'puppeteer';
 import fetch from 'node-fetch';
 
-/**
- * defines configuratiosn for the sahne runner
- * @param {import(".").SahneConfigs} options
- * @returns {import(".").SahneConfigs}
- */
-export const defineSahneConfig = (options) => options;
+import {
+	makeHandleProxy,
+	handlePathRewrite,
+	handleUrlRewrite,
+	handleResponse,
+	handleOverrideRequest,
+	getResponse,
+	handleRequestConfig
+} from './utils/index.mjs';
 
 /**
- * @param {import("puppeteer").HTTPRequest} interceptedRequest
- * @param {string | import(".").MatchTargetFunction} matchTarget
- * @returns {boolean}
+ * defines configurations for the sahne runner
+ * @param {import(".").SahneConfig} options
+ * @returns {import(".").SahneConfig}
  */
-const checkIsMatched = (interceptedRequest, matchTarget) => {
-	const requestUrlString = interceptedRequest.url();
+export const defineConfig = (options) => options;
 
-	if (typeof matchTarget === undefined) {
-		return false;
-	}
+const handleProxyUrl = ({
+	requestUrl,
+	handleProxyUrl,
+	pathRewrite,
+	urlRewrite,
+	interceptedRequest
+}) => {
+	interceptedRequest.url();
+	let proxyUrl = handleProxyUrl(requestUrl);
+	proxyUrl = handleUrlRewrite({ urlRewrite, proxyUrl, interceptedRequest });
+	proxyUrl = handlePathRewrite({ pathRewrite, proxyUrl, interceptedRequest });
 
-	if (typeof matchTarget === 'function') {
-		return matchTarget(requestUrlString, interceptedRequest);
-	}
-
-	// INFO: optimistic check for perfornace reasons
-	if (!requestUrlString.startsWith(matchTarget)) return false;
-
-	/**
-	 * INFO: Intercepted request URL with port might return false positive
-	 * with above condition when matchTarget does not have a port.
-	 *
-	 * Example:
-	 * const matchTarget = "https://example.com"
-	 * const requestUrl = "https://example.com:3000"
-	 *
-	 * So we need to make sure that ports are matching.
-	 */
-	const requestUrlInstance = new URL(requestUrlString);
-	const targetUrlInstance = new URL(matchTarget);
-	if (requestUrlInstance.port !== targetUrlInstance.port) return false;
-
-	return true;
-};
-
-/**
- * @param {import("puppeteer").HTTPRequest} interceptedRequest
- * @param {string | import(".").ProxyTargetFunction} proxyTarget
- * @returns
- */
-const getProxyTargetUrl = (interceptedRequest, proxyTarget) => {
-	const requestUrlString = interceptedRequest.url();
-	if (typeof proxyTarget === 'function') {
-		return proxyTarget(requestUrlString, interceptedRequest);
-	}
-
-	if (typeof proxyTarget === 'string') {
-		const requestOrigin = new URL(interceptedRequest.url()).origin;
-		let proxyTargetUrl = requestUrlString.replace(requestOrigin, proxyTarget);
-
-		return proxyTargetUrl;
-	}
-
-	throw new Error('Invalid proxyTarget configuration,');
+	return proxyUrl;
 };
 
 /**
  * Request handler
  * @param {import("puppeteer").HTTPRequest} interceptedRequest
- * @param {import(".").Interceptor} interceptConfigs
+ * @param {import(".").Config} config
  * @returns {Promise<void>}
  */
-const handleRequest = async (
-	interceptedRequest,
-	{
+const handleRequest = async (interceptedRequest, config, handlers) => {
+	const {
+		match,
+		ignore,
+
+		urlRewrite,
+		pathRewrite,
+
 		onRequest,
-		matchTarget,
-		proxyTarget,
-		overrides = {},
-		ignoreRequest,
-		ignoreRequestAfterProxyResponse
-	}
-) => {
-	if (onRequest) {
-		await onRequest(interceptedRequest);
-		if (interceptedRequest.isInterceptResolutionHandled()) return;
-	}
+		fallback,
+		abort,
 
-	if (!matchTarget || !proxyTarget) return;
-	const isMatched = checkIsMatched(interceptedRequest, matchTarget);
-	if (!isMatched) return;
-	if (ignoreRequest && ignoreRequest(interceptedRequest)) return;
+		onResponse,
+		ignoreOnResponse,
+		fallbackOnResponse,
+		abortOnResponse,
 
-	const proxyTargetUrl = getProxyTargetUrl(interceptedRequest, proxyTarget);
+		overrideRequestBody,
+		overrideRequestHeaders,
+		overrideRequestOptions,
 
-	let proxyRequestOptions = {
-		method: interceptedRequest.method(),
-		headers: interceptedRequest.headers(),
-		body: interceptedRequest.postData()
-	};
+		overrideResponseHeaders,
+		overrideResponseBody,
+		overrideResponseOptions
+	} = config;
 
-	/**
-	 * @type {import(".").NodeFetchArgs}
-	 */
-	let proxyRequestFetchArgs = [proxyTargetUrl, proxyRequestOptions];
-	if (overrides.proxyRequestArgs) {
-		overrides.proxyRequestArgs(proxyRequestFetchArgs, interceptedRequest);
-	}
+	const isRequestHandled = await handleRequestConfig({
+		match,
+		ignore,
+		interceptedRequest,
+		onRequest,
+		fallback,
+		abort
+	});
+	if (isRequestHandled) return;
 
-	let proxyResponse;
+	const proxyUrl = handleProxyUrl({
+		requestUrl: interceptedRequest.url(),
+		handleProxyUrl: handlers.handleProxyUrl,
+		pathRewrite,
+		urlRewrite,
+		interceptedRequest
+	});
+	const requestOptions = handleOverrideRequest({
+		overrideRequestOptions,
+		overrideRequestBody,
+		overrideRequestHeaders,
+		interceptedRequest,
+		proxyUrl
+	});
+
+	let responseRaw;
 	try {
-		proxyResponse = await fetch(...proxyRequestFetchArgs);
-		const responseBody = await proxyResponse.arrayBuffer();
-		const responseHeaders = proxyResponse.headers.raw();
-
-		const internalRespondCondition = proxyResponse.status !== 404;
-		const respondCondition = ignoreRequestAfterProxyResponse
-			? !ignoreRequestAfterProxyResponse(
-					proxyResponse,
-					interceptedRequest,
-					!internalRespondCondition
-			  )
-			: internalRespondCondition;
-
-		if (respondCondition) {
-			let response = {
-				status: proxyResponse.status,
-				headers: responseHeaders,
-				body: Buffer.from(responseBody),
-				contentType: proxyResponse.headers.get('content-type') || ''
-			};
-
-			/**
-			 * @type {import(".").PuppeteerRespondArgs}
-			 */
-			const proxyResponsePuppeteerArgs = [response, undefined];
-			if (overrides.proxyResponseArgs) {
-				overrides.proxyResponseArgs(proxyResponsePuppeteerArgs, interceptedRequest, proxyResponse);
-			}
-			await interceptedRequest.respond(...proxyResponsePuppeteerArgs);
-
-			return;
-		}
+		responseRaw = await fetch(proxyUrl, requestOptions);
 	} catch (e) {
-		console.log('e', e);
+		// TODO: handleRequestFail
+		// handleRequestFail({ onRequestFail, error, interceptedRequest });
+		return;
 	}
+
+	const response = await getResponse(responseRaw);
+
+	await handleResponse({
+		interceptedRequest,
+		response,
+		responseRaw,
+		onResponse,
+		overrideResponseHeaders,
+		overrideResponseBody,
+		overrideResponseOptions,
+		ignoreOnResponse,
+		fallbackOnResponse,
+		abortOnResponse
+	});
 };
 
 /** *
- * @param {import(".").SahneConfigs} options
+ * @param {import(".").SahneConfig} options
  * @returns {Promise<void>} - A promise that resolves when the script finishes running.
  */
 const run = async ({
@@ -174,12 +142,16 @@ const run = async ({
 
 	page.on('request', async (interceptedRequest) => {
 		for (const config of allConfigs) {
-			if (interceptedRequest.isInterceptResolutionHandled()) return;
-			await handleRequest(interceptedRequest, config);
+			if (config === undefined) return;
+			if (interceptedRequest.isInterceptResolutionHandled()) break;
+			const handleProxyUrl = makeHandleProxy({ proxy: config.proxy, interceptedRequest });
+			const handlers = { handleProxyUrl };
+			await handleRequest(interceptedRequest, config, handlers);
 		}
 
+		// INFO: Fallback if not handled
 		if (!interceptedRequest.isInterceptResolutionHandled()) {
-			interceptedRequest.continue();
+			await interceptedRequest.continue();
 		}
 	});
 
