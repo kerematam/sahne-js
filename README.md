@@ -1,6 +1,6 @@
 # SahneJS
 
-Sahne is a tool designed for testing and debugging. It uses Puppeteer's interceptor to implement a reverse proxy, allowing for local request manipulation within the browser.
+A tool designed for testing and debugging that uses Puppeteer's interceptor to proxy the desired requests to an internal development server from any specified URL.
 
 
 https://github.com/kerematam/sahne-js/assets/5495509/1f6dd509-6feb-4730-9603-6e6ee6161a5b
