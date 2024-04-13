@@ -13,7 +13,7 @@ import {
 } from './utils/index.mjs';
 
 /**
- * defines configuratiosn for the sahne runner
+ * defines configurations for the sahne runner
  * @param {import(".").SahneConfig} options
  * @returns {import(".").SahneConfig}
  */
