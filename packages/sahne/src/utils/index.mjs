@@ -217,8 +217,10 @@ export const handleRequestConfig = async ({
 	const baseUrl = parsedUrl.origin;
 
 	const isMatched = handleMatch({ baseUrl, url, match, interceptedRequest }) ?? true;
+	if (!isMatched) return true;
+	
 	const isIgnored = handleMatch({ baseUrl, url, match: ignore, interceptedRequest }) ?? false;
-	if (!isMatched || isIgnored) {
+	if (isIgnored) {
 		await interceptedRequest.continue();
 		return true;
 	}
