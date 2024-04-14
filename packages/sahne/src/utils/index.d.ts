@@ -1,4 +1,5 @@
 import { HTTPRequest } from 'puppeteer';
+import type { Match } from '../index';
 
 export type UrlMatchesOptions = {
 	parsedUrl: URL;

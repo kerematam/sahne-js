@@ -1,3 +1,4 @@
+// @ts-check
 import type { RequestInit, Response } from 'node-fetch';
 import type { HTTPRequest, PuppeteerLaunchOptions, ResponseForRequest } from 'puppeteer';
 import type { GoToOptions } from 'puppeteer';
@@ -100,7 +101,7 @@ export type OverrideResponseBodyFunction = (
 
 export type OverrideResponseObject = {
 	status: ResponseRaw['status'];
-	headers: ReturnType<RequestBody['headers']['raw']>;
+	headers: Record<string, string>;
 	body: Buffer;
 	contentType: string;
 };
