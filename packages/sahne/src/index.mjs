@@ -1,15 +1,11 @@
 // @ts-check
 import puppeteer from 'puppeteer';
-import fetch from 'node-fetch';
 
 import {
 	makeHandleProxy,
-	handlePathRewrite,
-	handleUrlRewrite,
 	handleResponse,
-	handleOverrideRequest,
-	getResponse,
-	handleRequestConfig
+	handleRequestConfig,
+	handleRequest
 } from './utils/index.mjs';
 
 /**
@@ -19,31 +15,18 @@ import {
  */
 export const defineConfig = (options) => options;
 
-const handleProxyUrl = ({
-	requestUrl,
-	handleProxyUrl,
-	pathRewrite,
-	urlRewrite,
-	interceptedRequest
-}) => {
-	interceptedRequest.url();
-	let proxyUrl = handleProxyUrl(requestUrl);
-	proxyUrl = handleUrlRewrite({ urlRewrite, proxyUrl, interceptedRequest });
-	proxyUrl = handlePathRewrite({ pathRewrite, proxyUrl, interceptedRequest });
-
-	return proxyUrl;
-};
-
 /**
  * Request handler
  * @param {import("puppeteer").HTTPRequest} interceptedRequest
- * @param {import(".").Config} config
+ * @param {import(".").Interceptor} config
  * @returns {Promise<void>}
  */
-const handleRequest = async (interceptedRequest, config, handlers) => {
+const handleInterception = async (interceptedRequest, config, handlers) => {
 	const {
 		match,
 		ignore,
+		file,
+		proxy,
 
 		urlRewrite,
 		pathRewrite,
@@ -63,44 +46,36 @@ const handleRequest = async (interceptedRequest, config, handlers) => {
 
 		overrideResponseHeaders,
 		overrideResponseBody,
-		overrideResponseOptions
+		overrideResponseOptions,
+
+		onProxyFail,
+		onFileReadFail
 	} = config;
 
-	const isRequestHandled = await handleRequestConfig({
+	let isRequestHandled = await handleRequestConfig({
+		interceptedRequest,
 		match,
 		ignore,
-		interceptedRequest,
 		onRequest,
 		fallback,
-		abort
+		abort,
+		file
 	});
 	if (isRequestHandled) return;
 
-	const proxyUrl = handleProxyUrl({
-		requestUrl: interceptedRequest.url(),
-		handleProxyUrl: handlers.handleProxyUrl,
+	const { response, responseRaw } = await handleRequest({
+		file,
+		proxy,
 		pathRewrite,
-		urlRewrite,
-		interceptedRequest
-	});
-	const requestOptions = handleOverrideRequest({
 		overrideRequestOptions,
 		overrideRequestBody,
 		overrideRequestHeaders,
 		interceptedRequest,
-		proxyUrl
+		urlRewrite,
+		handlers,
+		onProxyFail,
+		onFileReadFail
 	});
-
-	let responseRaw;
-	try {
-		responseRaw = await fetch(proxyUrl, requestOptions);
-	} catch (e) {
-		// TODO: handleRequestFail
-		// handleRequestFail({ onRequestFail, error, interceptedRequest });
-		return;
-	}
-
-	const response = await getResponse(responseRaw);
 
 	await handleResponse({
 		interceptedRequest,
@@ -144,9 +119,13 @@ const run = async ({
 		for (const config of allConfigs) {
 			if (config === undefined) return;
 			if (interceptedRequest.isInterceptResolutionHandled()) break;
-			const handleProxyUrl = makeHandleProxy({ proxy: config.proxy, interceptedRequest });
-			const handlers = { handleProxyUrl };
-			await handleRequest(interceptedRequest, config, handlers);
+
+			const handlers = {
+				handleProxyUrl: config.proxy
+					? makeHandleProxy({ proxy: config.proxy, interceptedRequest })
+					: undefined
+			};
+			await handleInterception(interceptedRequest, config, handlers);
 		}
 
 		// INFO: Fallback if not handled

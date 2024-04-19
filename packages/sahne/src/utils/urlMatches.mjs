@@ -1,5 +1,6 @@
 // @ts-check
 
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions#escaping
 const escapedChars = new Set([
 	'$',
 	'^',
@@ -114,11 +115,15 @@ export default function urlMatches({ parsedUrl, baseUrl, urlString, match, reque
 		return true;
 	}
 	if (typeof match === 'string' && !match.startsWith('*')) {
+		console.log('here? 1', match);
 		match = constructURLBasedOnBaseURL(baseUrl, match);
+		console.log('here? 2', match);
 	}
 	if (typeof match === 'string') {
+		// console.log('here?');
 		match = globToRegex(match);
 	}
+	// console.log('match', match);
 	if (match instanceof RegExp) {
 		return match.test(urlString);
 	}

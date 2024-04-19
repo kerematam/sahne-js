@@ -29,7 +29,7 @@ export declare interface SahneConfig {
 	/**
 	 * The interceptor config to be used.
 	 */
-	interceptor?: Config | Config[];
+	interceptor?: Interceptor | Interceptor[];
 }
 
 export type RequestHeaders = ReturnType<HTTPRequest['headers']>;
@@ -178,7 +178,7 @@ export type ActionOnResponseParams = {
 /**
  * Configuration options for the Sahne package.
  */
-export type Config = {
+export type CommonConfig = {
 	/**
 	 * A glob pattern, regex pattern or predicate receiving [URL] to match while
 	 * routing. When a `baseURL` via the context options was provided and the
@@ -197,27 +197,6 @@ export type Config = {
 	 */
 	ignore?: Match | Match[];
 	/**
-	 * The proxy URL where intercepted requests will be sent (proxied to).
-	 * The path and query params will be mapped to the proxy target.
-	 * The query params will be appended to the proxy URL.
-	 *
-	 * @example https://example.com/prefix
-	 * @example https://example.com?param=value
-	 */
-	proxy?: string | Function;
-	/**
-	 * Rewrite the path before sending the request to the proxy target.
-	 * @param {string} path - The original path of the request.
-	 * @returns {string} - The rewritten path.
-	 */
-	pathRewrite?: (path: string) => string;
-	/**
-	 * Rewrite the URL before sending the request to the proxy target.
-	 * @param {string} url - The original URL of the request.
-	 * @returns {string} - The rewritten URL.
-	 */
-	urlRewrite?: (url: string) => string;
-	/**
 	 * The request method to be intercepted.
 	 * @param {OnRequestParams} params - Params to be passed to the function.
 	 * @param {Action} params.action - Avaliable actions that can be called.
@@ -226,7 +205,15 @@ export type Config = {
 	 * @returns {void} - Returns void.
 	 */
 	onRequest?: (param: OnRequestParams) => void;
+	/**
+	 * Intercepted request ignored (not intercepted) if the function returns true.
+	 * It will not be handled by any other following rules unlike fallback.
+	 */
 	abort?: Match | Match[];
+	/**
+	 * Intercepted request will fallback to next rule if the function returns
+	 * true and not be handled by the current one.
+	 */
 	fallback?: Match | Match[];
 	/**
 	 * The response method to be intercepted.
@@ -270,22 +257,6 @@ export type Config = {
 	 */
 	fallbackOnResponse?: (params: ActionOnResponseParams) => boolean;
 	/**
-	 * Overrirde request headers to be passed to fetch method of NodeFetch
-	 */
-	overrideRequestHeaders?: OverrideRequestHeadersFunction;
-	/**
-	 * Overrirde request headers to be passed to fetch method of NodeFetch
-	 */
-	overrideRequestBody?:
-		| Partial<ReturnType<OverrideRequestBodyFunction>>
-		| OverrideRequestBodyFunction;
-	/**
-	 * Overrirde request headers to be passed to Puppeteer's fetch method
-	 */
-	overrideRequestOptions?:
-		| Partial<ReturnType<OverrideRequesOptionsFunction>>
-		| OverrideRequesOptionsFunction;
-	/**
 	 * Overrirde response headers to be passed to Puppeteer's respond method
 	 */
 	overrideResponseHeaders?:
@@ -304,3 +275,76 @@ export type Config = {
 		| Partial<ReturnType<OverrideResponseOptionsFunction>>
 		| OverrideResponseOptionsFunction;
 };
+
+export type FileConfig = {
+	/**
+	 * The file path to be used as the response body.
+	 */
+	file: string | ((requestUrl: string, request: HTTPRequest) => string);
+	/**
+	 * The function to be called when the file read fails.
+	 * @param {Error} error - The error object.
+	 * @param {HTTPRequest} request - The intercepted request.
+	 * @returns {void}
+	 */
+	onFileReadFail?: (error: Error, request: HTTPRequest) => void;
+};
+
+export type ProxyConfig = {
+	/**
+	 * The proxy URL where intercepted requests will be sent (proxied to).
+	 * The path and query params will be mapped to the proxy target.
+	 * The query params will be appended to the proxy URL.
+	 *
+	 * @example https://example.com/prefix
+	 * @example https://example.com?param=value
+	 */
+	proxy: string | ((requestUrl: string, request: HTTPRequest) => string);
+	/**
+	 * The function to be called when the proxy request fails.
+	 * @param {Error} error - The error object.
+	 * @param {HTTPRequest} request - The intercepted request.
+	 * @returns {void}
+	 */
+	onProxyFail?: (error: Error, request: HTTPRequest) => void;
+	/**
+	 * Rewrite the path before sending the request to the proxy target.
+	 * @param {string} path - The original path of the request.
+	 * @returns {string} - The rewritten path.
+	 */
+	pathRewrite?: (path: string, request: HTTPRequest) => string;
+	/**
+	 * Rewrite the URL before sending the request to the proxy target.
+	 * @param {string} url - The original URL of the request.
+	 * @returns {string} - The rewritten URL.
+	 */
+	urlRewrite?: (url: string, request: HTTPRequest) => string;
+	/**
+	 * Overrirde request headers to be passed to fetch method of NodeFetch
+	 */
+	overrideRequestHeaders?:
+		| Partial<ReturnType<OverrideRequestHeadersFunction>>
+		| OverrideRequestHeadersFunction;
+	/**
+	 * Overrirde request headers to be passed to fetch method of NodeFetch
+	 */
+	overrideRequestBody?:
+		| Partial<ReturnType<OverrideRequestBodyFunction>>
+		| OverrideRequestBodyFunction;
+	/**
+	 * Overrirde request headers to be passed to Puppeteer's fetch method
+	 */
+	overrideRequestOptions?:
+		| Partial<ReturnType<OverrideRequesOptionsFunction>>
+		| OverrideRequesOptionsFunction;
+};
+
+type AllPropsNever<T> = {
+	[P in keyof T]?: never;
+};
+
+export type ConfigForProxy = CommonConfig & AllPropsNever<FileConfig> & ProxyConfig;
+
+export type ConfigForFile = CommonConfig & AllPropsNever<ProxyConfig> & FileConfig;
+
+export type Interceptor = ConfigForProxy | ConfigForFile;

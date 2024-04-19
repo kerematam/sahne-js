@@ -1,5 +1,7 @@
 // @ts-check
 import urlMatches from './urlMatches.mjs';
+import fs from 'fs';
+import fetch from 'node-fetch';
 
 /** *
  * @param {import("puppeteer").HTTPRequest} interceptedRequest
@@ -218,7 +220,7 @@ export const handleRequestConfig = async ({
 
 	const isMatched = handleMatch({ baseUrl, url, match, interceptedRequest }) ?? true;
 	if (!isMatched) return true;
-	
+
 	const isIgnored = handleMatch({ baseUrl, url, match: ignore, interceptedRequest }) ?? false;
 	if (isIgnored) {
 		await interceptedRequest.continue();
@@ -328,4 +330,112 @@ export const handleOnResponse = async ({
 	}
 
 	throw new Error(`onResponse is not a function. It is ${typeof onResponse}.`);
+};
+
+export const handleFilePath = ({ file, interceptedRequest }) => {
+	if (typeof file === 'string') return file;
+	const url = interceptedRequest.url();
+	if (typeof file === 'function') return file(url, interceptedRequest);
+
+	throw new Error(`file is not a string or a function. It is ${typeof file}.`);
+};
+
+export const handleProxyUrl = ({
+	requestUrl,
+	handleProxyUrl,
+	pathRewrite,
+	urlRewrite,
+	interceptedRequest
+}) => {
+	let proxyUrl = handleProxyUrl(requestUrl);
+	proxyUrl = handleUrlRewrite({ urlRewrite, proxyUrl, interceptedRequest });
+	proxyUrl = handlePathRewrite({ pathRewrite, proxyUrl, interceptedRequest });
+
+	return proxyUrl;
+};
+
+export const handleProxyRequest = async ({
+	pathRewrite,
+	overrideRequestOptions,
+	overrideRequestBody,
+	overrideRequestHeaders,
+	interceptedRequest,
+	urlRewrite,
+	handlers,
+	onProxyFail
+}) => {
+	const proxyUrl = handleProxyUrl({
+		requestUrl: interceptedRequest.url(),
+		handleProxyUrl: handlers.handleProxyUrl,
+		pathRewrite,
+		urlRewrite,
+		interceptedRequest
+	});
+	const requestOptions = handleOverrideRequest({
+		overrideRequestOptions,
+		overrideRequestBody,
+		overrideRequestHeaders,
+		interceptedRequest,
+		proxyUrl
+	});
+
+	try {
+		const responseRaw = await fetch(proxyUrl, requestOptions);
+		const response = await getResponse(responseRaw);
+		return { response, responseRaw };
+	} catch (error) {
+		onProxyFail?.(error, interceptedRequest);
+		return {
+			response: undefined,
+			responseRaw: undefined
+		};
+	}
+};
+
+export const handleFileRequest = async ({ file, interceptedRequest, onFileReadFail }) => {
+	const path = handleFilePath({ file, interceptedRequest });
+	try {
+		const body = await fs.readFileSync(path);
+		const response = { body };
+
+		return { response };
+	} catch (error) {
+		onFileReadFail?.(error, interceptedRequest);
+		return { response: undefined };
+	}
+};
+
+export const handleRequest = async ({
+	file,
+	proxy,
+	pathRewrite,
+	overrideRequestOptions,
+	overrideRequestBody,
+	overrideRequestHeaders,
+	interceptedRequest,
+	urlRewrite,
+	handlers,
+	onProxyFail,
+	onFileReadFail
+}) => {
+	if (proxy) {
+		return await handleProxyRequest({
+			pathRewrite,
+			overrideRequestOptions,
+			overrideRequestBody,
+			overrideRequestHeaders,
+			interceptedRequest,
+			urlRewrite,
+			handlers,
+			onProxyFail
+		});
+	}
+
+	if (file) {
+		return await handleFileRequest({ file, interceptedRequest, onFileReadFail });
+	}
+
+	throw new Error(
+		'No configuration provided to handle the request. You should either give proxy or file configuration.'
+	);
 };
