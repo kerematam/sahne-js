@@ -58,8 +58,7 @@ const handleInterception = async (interceptedRequest, config, handlers) => {
 		ignore,
 		onRequest,
 		fallback,
-		abort,
-		file
+		abort
 	});
 	if (isRequestHandled) return;
 
@@ -91,6 +90,31 @@ const handleInterception = async (interceptedRequest, config, handlers) => {
 	});
 };
 
+/**
+ * Handles all the interceptors
+ * @param {import("puppeteer").HTTPRequest} interceptedRequest
+ * @param {(import(".").Interceptor | undefined)[]} allConfigs
+ * @returns {Promise<void>}
+ */
+const handleInterceptions = async (interceptedRequest, allConfigs) => {
+	for (const config of allConfigs) {
+		if (config === undefined) return;
+		if (interceptedRequest.isInterceptResolutionHandled()) break;
+
+		const handlers = {
+			handleProxyUrl: config.proxy
+				? makeHandleProxy({ proxy: config.proxy, interceptedRequest })
+				: undefined
+		};
+		await handleInterception(interceptedRequest, config, handlers);
+	}
+
+	// INFO: Fallback if not handled
+	if (!interceptedRequest.isInterceptResolutionHandled()) {
+		await interceptedRequest.continue();
+	}
+};
+
 /** *
  * @param {import(".").SahneConfig} options
  * @returns {Promise<void>} - A promise that resolves when the script finishes running.
@@ -115,23 +139,8 @@ const run = async ({
 
 	const allConfigs = Array.isArray(interceptor) ? interceptor : [interceptor];
 
-	page.on('request', async (interceptedRequest) => {
-		for (const config of allConfigs) {
-			if (config === undefined) return;
-			if (interceptedRequest.isInterceptResolutionHandled()) break;
-
-			const handlers = {
-				handleProxyUrl: config.proxy
-					? makeHandleProxy({ proxy: config.proxy, interceptedRequest })
-					: undefined
-			};
-			await handleInterception(interceptedRequest, config, handlers);
-		}
-
-		// INFO: Fallback if not handled
-		if (!interceptedRequest.isInterceptResolutionHandled()) {
-			await interceptedRequest.continue();
-		}
+	page.on('request', (interceptedRequest) => {
+		handleInterceptions(interceptedRequest, allConfigs);
 	});
 
 	await page.goto(initialUrl, puppeteerOptions.goto);
