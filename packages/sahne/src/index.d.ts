@@ -299,7 +299,7 @@ export type ProxyConfig = {
 	 * @example https://example.com/prefix
 	 * @example https://example.com?param=value
 	 */
-	proxy: string | ((requestUrl: string, request: HTTPRequest) => string);
+	proxy?: string | ((requestUrl: string, request: HTTPRequest) => string);
 	/**
 	 * The function to be called when the proxy request fails.
 	 * @param {Error} error - The error object.

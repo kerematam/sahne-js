@@ -26,7 +26,6 @@ const handleInterception = async (interceptedRequest, config, handlers) => {
 		match,
 		ignore,
 		file,
-		proxy,
 
 		urlRewrite,
 		pathRewrite,
@@ -64,7 +63,6 @@ const handleInterception = async (interceptedRequest, config, handlers) => {
 
 	const { response, responseRaw } = await handleRequest({
 		file,
-		proxy,
 		pathRewrite,
 		overrideRequestOptions,
 		overrideRequestBody,
@@ -101,11 +99,8 @@ const handleInterceptions = async (interceptedRequest, allConfigs) => {
 		if (config === undefined) return;
 		if (interceptedRequest.isInterceptResolutionHandled()) break;
 
-		const handlers = {
-			handleProxyUrl: config.proxy
-				? makeHandleProxy({ proxy: config.proxy, interceptedRequest })
-				: undefined
-		};
+		const handleProxyUrl = makeHandleProxy({ proxy: config.proxy, interceptedRequest });
+		const handlers = { handleProxyUrl };
 		await handleInterception(interceptedRequest, config, handlers);
 	}
 

@@ -14,7 +14,7 @@ export const isRequestHandled = (interceptedRequest) =>
  * Creates a handle proxy function that modifies the request URL based on the provided proxy configuration.
  *
  * @param {Object} options - The options for creating the handle proxy function.
- * @param {string|Function} options.proxy - The proxy URL or a function that modifies the request URL.
+ * @param {undefined|string|Function} options.proxy - The proxy URL or a function that modifies the request URL.
  * @param {import("puppeteer").HTTPRequest} options.interceptedRequest - The intercepted request object.
  * @returns {import(".").handleProxyUrl} The handle proxy function.
  */
@@ -407,7 +407,6 @@ export const handleFileRequest = async ({ file, interceptedRequest, onFileReadFa
 
 export const handleRequest = async ({
 	file,
-	proxy,
 	pathRewrite,
 	overrideRequestOptions,
 	overrideRequestBody,
@@ -418,24 +417,18 @@ export const handleRequest = async ({
 	onProxyFail,
 	onFileReadFail
 }) => {
-	if (proxy) {
-		return await handleProxyRequest({
-			pathRewrite,
-			overrideRequestOptions,
-			overrideRequestBody,
-			overrideRequestHeaders,
-			interceptedRequest,
-			urlRewrite,
-			handlers,
-			onProxyFail
-		});
-	}
-
 	if (file) {
 		return await handleFileRequest({ file, interceptedRequest, onFileReadFail });
 	}
 
-	throw new Error(
-		'No configuration provided to handle the request. You should either give proxy or file configuration.'
-	);
+	return await handleProxyRequest({
+		pathRewrite,
+		overrideRequestOptions,
+		overrideRequestBody,
+		overrideRequestHeaders,
+		interceptedRequest,
+		urlRewrite,
+		handlers,
+		onProxyFail
+	});
 };
