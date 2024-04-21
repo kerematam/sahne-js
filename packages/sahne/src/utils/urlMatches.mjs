@@ -1,5 +1,6 @@
 // @ts-check
 
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions#escaping
 const escapedChars = new Set([
 	'$',
 	'^',
