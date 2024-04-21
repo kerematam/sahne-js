@@ -45,6 +45,7 @@
 	},
 	"files": [
 		"cli.js",
-		"src"
+		"src",
+		".npmignore"
 	]
 }
