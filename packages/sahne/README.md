@@ -1,6 +1,6 @@
 # SahneJS
 
-A tool designed for testing and debugging that uses Puppeteer's interceptor to proxy the desired requests to an internal development server from any specified URL.
+A tool designed for mocking, testing and debugging that uses Puppeteer's interceptor to proxy the desired requests to an internal development server from any specified URL.
 
 https://github.com/kerematam/sahne-js/assets/5495509/1f6dd509-6feb-4730-9603-6e6ee6161a5b
 
@@ -61,7 +61,7 @@ npx sahne
 To be able to use with HMR in Vite, you need to expose HMR socket seperately to escape target domain:
 
 ```js
-// https://vitejs.dev/config/
+// vite.config.js: https://vitejs.dev/config/
 export default defineConfig({
 	// ...
 	server: {
