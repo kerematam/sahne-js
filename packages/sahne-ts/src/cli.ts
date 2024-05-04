@@ -1,4 +1,4 @@
-import { run } from './main';
+import { run } from './run';
 
 const { program } = require('commander');
 const { readConfig, ConfigLoaderError } = require('@web/config-loader');

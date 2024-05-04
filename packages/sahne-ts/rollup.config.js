@@ -2,45 +2,52 @@ const typescript = require('@rollup/plugin-typescript');
 const { nodeResolve } = require('@rollup/plugin-node-resolve');
 const commonjs = require('@rollup/plugin-commonjs');
 const peerDepsExternal = require('rollup-plugin-peer-deps-external');
-const json = require("@rollup/plugin-json");
+const json = require('@rollup/plugin-json');
 
 module.exports = [
 	{
 		// Configuration for the CLI
 		input: 'src/cli.ts', // Your CLI entry point
-		plugins: [
-			peerDepsExternal(),
-			nodeResolve(),
-			commonjs(),
-			typescript(),
-			json()
-		],
-		output: {
-			file: 'dist/cli.js',
-			format: 'cjs',
-			banner: '#!/usr/bin/env node', // Ensures the output is executable
-			sourcemap: true
-		}
+		plugins: [peerDepsExternal(), nodeResolve(), commonjs(), typescript(), json()],
+		output: [
+			{
+				dir: './dist',
+				format: 'cjs',
+				banner: '#!/usr/bin/env node', // Ensures the output is executable
+				sourcemap: true,
+				entryFileNames: '[name].cjs',
+				preferBuiltins: false,
+
+			}
+			// TODO: use it in the future
+			// {
+			// 	dir: './dist',
+			// 	format: 'es',
+			// 	banner: '#!/usr/bin/env node', // Ensures the output is executable
+			// 	sourcemap: true,
+			// 	// preserveModules: true,
+			// 	entryFileNames: '[name].mjs'
+			// }
+		]
 	},
 	{
 		// Configuration for the library
-		input: 'src/main.ts', // Main library entry point
-		plugins: [
-			peerDepsExternal(),
-			nodeResolve(),
-			commonjs(),
-			typescript(),
-		],
+		input: 'src/index.ts', // Main library entry point
+		plugins: [peerDepsExternal(), nodeResolve(), commonjs(), typescript()],
 		output: [
 			{
-				file: 'dist/bundle.cjs.js',
+				
+				dir: './dist',
 				format: 'cjs',
-				sourcemap: true
+				sourcemap: true,
+				entryFileNames: '[name].cjs'
 			},
 			{
-				file: 'dist/bundle.esm.js',
+				
+				dir: './dist',
 				format: 'es',
-				sourcemap: true
+				sourcemap: true,
+				entryFileNames: '[name].mjs'
 			}
 		]
 	}
