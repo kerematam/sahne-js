@@ -1,6 +1,6 @@
 # SahneJS
 
-A tool designed for testing and debugging that uses Puppeteer's interceptor to proxy the desired requests to an internal development server from any specified URL.
+SahneJs is a tool that can be used for mocking, testing, and debugging by intercepting and manipulating certain requests. It uses Puppeteer's interceptor to redirect specific requests for manipulation. You can direct these requests to an internal development server from any URL, or read them from a local file you specify.
 
 https://github.com/kerematam/sahne-js/assets/5495509/1f6dd509-6feb-4730-9603-6e6ee6161a5b
 
