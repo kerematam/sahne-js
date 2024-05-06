@@ -1,6 +1,6 @@
 {
 	"name": "sahne-js",
-	"version": "1.0.0-rc.6",
+	"version": "1.0.0-rc.7",
 	"description": "A tool designed for testing and debugging that uses Puppeteer's interceptor to proxy the desired requests to an internal development server from any specified URL.",
 	"keywords": [
 		"sahne",
