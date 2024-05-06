@@ -1,12 +1,6 @@
-// @ts-check
-import puppeteer from 'puppeteer';
-
-import {
-	makeHandleProxy,
-	handleResponse,
-	handleRequestConfig,
-	handleRequest
-} from './utils/index.mjs';
+import puppeteer, { HTTPRequest } from 'puppeteer';
+import { Interceptor, SahneConfig } from './types';
+import { makeHandleProxy, handleResponse, handleRequestConfig, handleRequest } from './utils';
 import { setDefaultResultOrder } from 'node:dns';
 
 // CAVEAT: This is fix for the following issue:
@@ -14,20 +8,11 @@ import { setDefaultResultOrder } from 'node:dns';
 // - https://stackoverflow.com/questions/72390154/econnrefused-when-making-a-request-to-localhost-using-fetch-in-node-js
 setDefaultResultOrder('ipv4first');
 
-/**
- * defines configurations for the sahne runner
- * @param {import(".").SahneConfig} options
- * @returns {import(".").SahneConfig}
- */
-export const defineConfig = (options) => options;
-
-/**
- * Request handler
- * @param {import("puppeteer").HTTPRequest} interceptedRequest
- * @param {import(".").Interceptor} config
- * @returns {Promise<void>}
- */
-const handleInterception = async (interceptedRequest, config, handlers) => {
+const handleInterception = async (
+	interceptedRequest: HTTPRequest,
+	config: Interceptor,
+	handlers: any
+): Promise<void> => {
 	const {
 		match,
 		ignore,
@@ -65,6 +50,7 @@ const handleInterception = async (interceptedRequest, config, handlers) => {
 		fallback,
 		abort
 	});
+
 	if (isRequestHandled) return;
 
 	const { response, responseRaw } = await handleRequest({
@@ -94,13 +80,10 @@ const handleInterception = async (interceptedRequest, config, handlers) => {
 	});
 };
 
-/**
- * Handles all the interceptors
- * @param {import("puppeteer").HTTPRequest} interceptedRequest
- * @param {(import(".").Interceptor | undefined)[]} allConfigs
- * @returns {Promise<void>}
- */
-const handleInterceptions = async (interceptedRequest, allConfigs) => {
+const handleInterceptions = async (
+	interceptedRequest: HTTPRequest,
+	allConfigs: (Interceptor | undefined)[]
+): Promise<void> => {
 	for (const config of allConfigs) {
 		if (config === undefined) return;
 		if (interceptedRequest.isInterceptResolutionHandled()) break;
@@ -116,18 +99,14 @@ const handleInterceptions = async (interceptedRequest, allConfigs) => {
 	}
 };
 
-/** *
- * @param {import(".").SahneConfig} options
- * @returns {Promise<void>} - A promise that resolves when the script finishes running.
- */
-const run = async ({
+export const run = async ({
 	initialUrl,
 	puppeteerOptions = {
 		goto: {},
 		launch: {}
 	},
 	interceptor
-}) => {
+}: SahneConfig): Promise<void> => {
 	const browser = await puppeteer.launch({
 		defaultViewport: null,
 		headless: false,
@@ -146,5 +125,3 @@ const run = async ({
 
 	await page.goto(initialUrl, puppeteerOptions.goto);
 };
-
-export default run;

@@ -1,14 +1,14 @@
-import { defineSahneConfig } from "sahne";
+import { defineConfig } from 'sahne-js';
 
-const target = "http://localhost:4173";
+const target = 'http://localhost:4173';
 
-export default defineSahneConfig({
-  initialUrl: target,
-  interceptor: [
-    {
-      matchTarget: target,
-      proxyTarget: "http://localhost:5173",
-      ignoreRequest: (req) => req.url().startsWith(`${target}/mock-api`),
-    }
-  ],
+export default defineConfig({
+	initialUrl: target,
+	interceptor: [
+		{
+			match: 'http://localhost:4173/**',
+			ignore: '/mock-api/*',
+			proxyOrigin: 'http://localhost:5173'
+		}
+	]
 });
