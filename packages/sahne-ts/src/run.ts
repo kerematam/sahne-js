@@ -1,11 +1,6 @@
 import puppeteer, { HTTPRequest } from 'puppeteer';
 import { Interceptor, SahneConfig } from './types';
-import {
-	makeHandleProxy,
-	handleResponse,
-	handleRequestConfig,
-	handleRequest
-} from './utils/index.mjs';
+import { makeHandleProxy, handleResponse, handleRequestConfig, handleRequest } from './utils';
 
 const handleInterception = async (
 	interceptedRequest: HTTPRequest,
@@ -49,6 +44,7 @@ const handleInterception = async (
 		fallback,
 		abort
 	});
+
 	if (isRequestHandled) return;
 
 	const { response, responseRaw } = await handleRequest({

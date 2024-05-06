@@ -3,6 +3,7 @@ const { nodeResolve } = require('@rollup/plugin-node-resolve');
 const commonjs = require('@rollup/plugin-commonjs');
 const peerDepsExternal = require('rollup-plugin-peer-deps-external');
 const json = require('@rollup/plugin-json');
+const builtins = require('rollup-plugin-node-builtins');
 
 module.exports = [
 	{
@@ -15,9 +16,7 @@ module.exports = [
 				format: 'cjs',
 				banner: '#!/usr/bin/env node', // Ensures the output is executable
 				sourcemap: true,
-				entryFileNames: '[name].cjs',
-				preferBuiltins: false,
-
+				entryFileNames: '[name].cjs'
 			}
 			// TODO: use it in the future
 			// {
@@ -36,14 +35,12 @@ module.exports = [
 		plugins: [peerDepsExternal(), nodeResolve(), commonjs(), typescript()],
 		output: [
 			{
-				
 				dir: './dist',
 				format: 'cjs',
 				sourcemap: true,
 				entryFileNames: '[name].cjs'
 			},
 			{
-				
 				dir: './dist',
 				format: 'es',
 				sourcemap: true,

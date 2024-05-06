@@ -1,5 +1,7 @@
 import { HTTPRequest } from 'puppeteer';
 import type { Match } from '../types';
+import { RequestOptions } from 'http';
+import { BodyInit } from 'node-fetch';
 
 export type UrlMatchesOptions = {
 	parsedUrl: URL;
@@ -13,4 +15,4 @@ export type UrlMatches = (options: UrlMatchesOptions) => boolean;
 
 export type IsRequestHandled = (url: HTTPRequest) => boolean;
 
-export type handleProxyUrl = (url: string) => string;
+export type HandleProxyUrl = (url: string) => string;
