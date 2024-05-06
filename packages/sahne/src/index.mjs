@@ -7,6 +7,12 @@ import {
 	handleRequestConfig,
 	handleRequest
 } from './utils/index.mjs';
+import { setDefaultResultOrder } from 'node:dns';
+
+// CAVEAT: This is fix for the following issue:
+// - https://github.com/node-fetch/node-fetch/issues/1624
+// - https://stackoverflow.com/questions/72390154/econnrefused-when-making-a-request-to-localhost-using-fetch-in-node-js
+setDefaultResultOrder('ipv4first');
 
 /**
  * defines configurations for the sahne runner

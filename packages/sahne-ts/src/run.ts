@@ -1,6 +1,12 @@
 import puppeteer, { HTTPRequest } from 'puppeteer';
 import { Interceptor, SahneConfig } from './types';
 import { makeHandleProxy, handleResponse, handleRequestConfig, handleRequest } from './utils';
+import { setDefaultResultOrder } from 'node:dns';
+
+// CAVEAT: This is fix for the following issue:
+// - https://github.com/node-fetch/node-fetch/issues/1624
+// - https://stackoverflow.com/questions/72390154/econnrefused-when-making-a-request-to-localhost-using-fetch-in-node-js
+setDefaultResultOrder('ipv4first');
 
 const handleInterception = async (
 	interceptedRequest: HTTPRequest,
