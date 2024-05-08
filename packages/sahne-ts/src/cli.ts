@@ -1,7 +1,6 @@
 import { run } from './run';
-
-const { program } = require('commander');
-const { readConfig, ConfigLoaderError } = require('@web/config-loader');
+import { program } from 'commander';
+import { readConfig, ConfigLoaderError } from '@web/config-loader';
 
 async function loadConfig() {
 	try {

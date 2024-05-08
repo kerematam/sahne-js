@@ -65,49 +65,56 @@ export const makeHandleProxy = ({
 	return handleProxyUrl;
 };
 
+type OverrideFunction<T, U> = (param: T, options?: U) => T;
+type OverrideObject<T> = Partial<T>;
+
+interface Options {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	[key: string]: any;
+}
+
 /**
- * Overrides the parameter with the provided override value.
+ * A function to override or merge parameters based on the provided override.
+ * The override can be a function, an object, or undefined.
  *
- * @param {Object|Function|undefined} override - The override value.
- * @param {any} param - The parameter to override.
- * @param {Object} options - Additional options for the override function.
- * @param {boolean} [isReplace=false] - Whether to replace the parameter with the override value.
- * @returns {any} The overridden parameter.
+ * @template T - Type of the primary parameter.
+ * @template U - Type of the options parameter (optional).
+ *
+ * @param {OverrideFunction<T, U> | OverrideObject<T> | undefined} override - A function or an object used to override the primary parameter, or undefined.
+ * @param {T} param - The primary parameter to be modified or overridden.
+ * @param {U} [options] - Optional additional data passed to the override function.
+ * @param {boolean} [isReplace=false] - If true, the override will replace the entire primary parameter.
+ * @returns {T} - The resulting modified parameter.
+ *
+ * @throws {Error} If the `override` is not a function or an object.
  */
-function overrideParam<TParam, TAdditionalParams, TProvided, TReturn>(
-	override: TParam | ((param: TProvided, options: TAdditionalParams) => TReturn) | undefined,
-	param: TParam,
-	options: TAdditionalParams,
+function overrideParam<T, U = Options>(
+	override: OverrideFunction<T, U> | OverrideObject<T> | undefined,
+	param: T,
+	options?: U,
 	isReplace: boolean = false
-): TReturn {
-	// if (override === undefined) return undefined as TReturn;
-	if (override === undefined) return param as unknown as TReturn;
+): T {
+	if (override === undefined) return param;
 
-	if (typeof override === 'function') {
-		return (override as Function)(param, options);
-	}
+	if (typeof override === 'function') return override(param, options);
 
-	if (isReplace && typeof override === 'object') {
-		return override as TReturn;
-	}
+	if (isReplace) return override as T;
 
-	if (typeof override === 'object' && typeof param === 'object') {
-		return { ...param, ...override } as TReturn;
-	}
+	if (typeof override === 'object') return { ...param, ...override };
 
 	throw new Error(`override should be a function or an object. It is ${typeof override}.`);
 }
 
-const handleAction = async ({
+const handleAction = async <T = object>({
 	name,
 	conditionFn,
 	params,
 	action
 }: {
 	name: string;
-	conditionFn: Function;
-	params: object;
-	action: Function;
+	conditionFn: (params: T) => boolean;
+	params: T;
+	action: (params: T) => void;
 }): Promise<void> => {
 	if (conditionFn === undefined) return;
 
