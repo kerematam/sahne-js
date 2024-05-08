@@ -20,15 +20,15 @@ A common scenario with SPA applications involves injecting development bundles i
 import { defineConfig } from 'sahne-js';
 
 export default defineConfig({
-	// initial URL to visit on load
-	initialUrl: 'https://your-prod-site.com/home-page',
-	interceptor: [
-		{
-			match: ({ href }) => href.startsWith('https://your-prod-site.com'),
-			proxy: 'http://localhost:5173',
-			ignore: 'https://your-prod-site.com/api/**'
-		}
-	]
+  // initial URL to visit on load
+  initialUrl: 'https://your-prod-site.com/home-page',
+  interceptor: [
+    {
+      match: ({ href }) => href.startsWith('https://your-prod-site.com'),
+      proxy: 'http://localhost:5173',
+      ignore: 'https://your-prod-site.com/api/**'
+    }
+  ]
 });
 ```
 
@@ -38,15 +38,15 @@ For CommonJS:
 const { defineConfig } = require('sahne-js');
 
 module.exports = defineConfig({
-	// initial URL to visit on load
-	initialUrl: 'https://your-prod-site.com/home-page',
-	interceptor: [
-		{
-			match: ({ href }) => href.startsWith('https://your-prod-site.com'),
-			proxy: 'http://localhost:5173', // dev server URL
-			ignore: 'https://your-prod-site.com/api/**'
-		}
-	]
+  // initial URL to visit on load
+  initialUrl: 'https://your-prod-site.com/home-page',
+  interceptor: [
+    {
+      match: ({ href }) => href.startsWith('https://your-prod-site.com'),
+      proxy: 'http://localhost:5173', // dev server URL
+      ignore: 'https://your-prod-site.com/api/**'
+    }
+  ]
 });
 ```
 
@@ -63,14 +63,14 @@ To be able to use with HMR in Vite, you need to expose HMR socket seperately to 
 ```js
 // vite.config.js: https://vitejs.dev/config/
 export default defineConfig({
-	// ...
-	server: {
-		strictPort: true,
-		hmr: {
-			protocol: 'ws',
-			host: '127.0.0.1',
-			clientPort: 5173
-		}
-	}
+  // ...
+  server: {
+    strictPort: true,
+    hmr: {
+      protocol: 'ws',
+      host: '127.0.0.1',
+      clientPort: 5173
+    }
+  }
 });
 ```
