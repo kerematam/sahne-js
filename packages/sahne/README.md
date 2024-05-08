@@ -17,7 +17,7 @@ A common scenario with SPA applications involves injecting development bundles i
 
 ```js
 // sahne.config.js, lets you easy access to types
-import { defineConfig } from 'sahne';
+import { defineConfig } from 'sahne-js';
 
 export default defineConfig({
 	// initial URL to visit on load
@@ -35,7 +35,7 @@ export default defineConfig({
 For CommonJS:
 
 ```js
-const { defineConfig } = require('sahne');
+const { defineConfig } = require('sahne-js');
 
 module.exports = defineConfig({
 	// initial URL to visit on load
