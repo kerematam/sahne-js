@@ -6,7 +6,8 @@
 		"outDir": "dist",
 		"esModuleInterop": true,
 		"moduleResolution": "node",
-		"types": ["node"]
+		"types": ["node"],
+		"resolveJsonModule": true
 	},
 	"include": ["src/**/*"]
 }

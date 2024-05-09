@@ -1,51 +1,39 @@
 {
 	"name": "sahne-js",
-	"version": "1.0.0-rc.7",
-	"description": "A tool designed for testing and debugging that uses Puppeteer's interceptor to proxy the desired requests to an internal development server from any specified URL.",
-	"keywords": [
-		"sahne",
-		"sahne-js",
-		"puppeteer",
-		"debug",
-		"test"
-	],
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/kerematam/sahne-js"
-	},
-	"peerDependencies": {
-		"puppeteer": "^20.0.0 || ^21.0.0 || ^22.0.0"
-	},
+	"version": "1.0.1-rc.0",
+	"description": "SahneJs is a tool that can be used for mocking, testing, and debugging by intercepting and manipulating certain requests. It uses Puppeteer's interceptor to redirect specific requests for manipulation. You can direct these requests to an internal development server from any URL, or read them from a local file you specify.",
 	"scripts": {
-		"build": "echo \"Guess, what? No build required!\"",
-		"test": "echo \"Error: no test specified\" && exit 1"
+		"build": "rollup -c",
+		"postbuild": "chmod +x ./dist/cli.*"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"main": "dist/index.cjs",
+	"module": "dist/index.mjs",
+	"types": "dist/index.d.ts",
+	"devDependencies": {
+		"@rollup/plugin-commonjs": "^25.0.7",
+		"@rollup/plugin-node-resolve": "^15.2.3",
+		"@rollup/plugin-typescript": "^11.1.6",
+		"@types/node": "^20.12.7",
+		"rollup": "^4.17.2",
+		"rollup-plugin-node-builtins": "^2.1.2",
+		"ts-node": "^10.9.2",
+		"tslib": "^2.6.2",
+		"typescript": "^5.4.5"
 	},
 	"bin": {
-		"sahne": "./cli.js"
+		"sahne": "./dist/cli.cjs"
 	},
-	"author": "Kerem ATAM",
-	"license": "ISC",
+	"peerDependencies": {
+		"puppeteer": "^22.7.1"
+	},
 	"dependencies": {
+		"@rollup/plugin-json": "^6.1.0",
 		"@web/config-loader": "^0.3.1",
-		"commander": "^11.1.0",
-		"node-fetch": "^3.3.2"
-	},
-	"main": "./src/index.mjs",
-	"types": "./src/index.d.ts",
-	"exports": {
-		".": {
-			"types": "./src/index.d.ts",
-			"import": "./src/index.mjs",
-			"require": "./src/index.cjs"
-		},
-		"./package.json": "./package.json"
-	},
-	"engines": {
-		"node": ">=18"
-	},
-	"files": [
-		"cli.js",
-		"src",
-		".npmignore"
-	]
+		"commander": "^12.0.0",
+		"node-fetch": "^3.3.2",
+		"rollup-plugin-peer-deps-external": "^2.2.4"
+	}
 }

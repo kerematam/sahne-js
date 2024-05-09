@@ -1,7 +1,5 @@
 import { HTTPRequest } from 'puppeteer';
 import type { Match } from '../types';
-import { RequestOptions } from 'http';
-import { BodyInit } from 'node-fetch';
 
 export type UrlMatchesOptions = {
 	parsedUrl: URL;

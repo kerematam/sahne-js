@@ -1,0 +1,13 @@
+diff --git a/node_modules/node-fetch/@types/index.d.ts b/node_modules/node-fetch/@types/index.d.ts
+index 274ca03..0026cbe 100644
+--- a/node_modules/node-fetch/@types/index.d.ts
++++ b/node_modules/node-fetch/@types/index.d.ts
+@@ -11,7 +11,7 @@ import {
+ 	fileFromSync
+ } from 'fetch-blob/from.js';
+ 
+-type AbortSignal = {
++export type AbortSignal = {
+ 	readonly aborted: boolean;
+ 
+ 	addEventListener: (type: 'abort', listener: (this: AbortSignal) => void) => void;

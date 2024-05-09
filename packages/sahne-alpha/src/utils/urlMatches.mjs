@@ -107,7 +107,7 @@ function constructURLBasedOnBaseURL(baseURL, givenURL) {
 /**
  * Checks if the URL matches the given match parameter.
  *
- * @param {import("./types").UrlMatchesOptions} options
+ * @param {import(".").UrlMatchesOptions} options
  * @returns {boolean}
  */
 export default function urlMatches({ parsedUrl, baseUrl, urlString, match, request }) {

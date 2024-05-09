@@ -2,6 +2,7 @@ import puppeteer, { HTTPRequest } from 'puppeteer';
 import { Interceptor, SahneConfig } from './types';
 import { makeHandleProxy, handleResponse, handleRequestConfig, handleRequest } from './utils';
 import { setDefaultResultOrder } from 'node:dns';
+import { HandleProxyUrl } from './utils/types';
 
 // CAVEAT: This is fix for the following issue:
 // - https://github.com/node-fetch/node-fetch/issues/1624
@@ -11,7 +12,7 @@ setDefaultResultOrder('ipv4first');
 const handleInterception = async (
 	interceptedRequest: HTTPRequest,
 	config: Interceptor,
-	handlers: any
+	handlers: { handleProxyUrl: HandleProxyUrl }
 ): Promise<void> => {
 	const {
 		match,
@@ -42,7 +43,7 @@ const handleInterception = async (
 		onFileReadFail
 	} = config;
 
-	let isRequestHandled = await handleRequestConfig({
+	const isRequestHandled = await handleRequestConfig({
 		interceptedRequest,
 		match,
 		ignore,

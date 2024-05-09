@@ -1,7 +1,9 @@
 import { run } from './run';
+import { program } from 'commander';
+import { readConfig, ConfigLoaderError } from '@web/config-loader';
+import { readFileSync } from 'fs';
 
-const { program } = require('commander');
-const { readConfig, ConfigLoaderError } = require('@web/config-loader');
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 async function loadConfig() {
 	try {
@@ -18,7 +20,7 @@ async function loadConfig() {
 }
 
 program
-	.version('0.1.0')
+	.version(pkg.version)
 	// TODO: add options to the CLI
 	// .option(
 	//   "-t, --target <target>",
