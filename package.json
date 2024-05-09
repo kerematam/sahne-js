@@ -18,12 +18,16 @@
 		"build:sahne-ts": "npm run build --workspace sahne-ts",
 		"build:sahne-js": "npm run build --workspace sahne-js",
 		"format": "prettier --write ./packages/sahne/**/*",
-		"test": "echo \"Error: no test specified\" && exit 1"
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"postinstall": "patch-package"
 	},
 	"workspaces": [
 		"packages/sahne",
 		"packages/sahne-ts"
 	],
 	"author": "Kerem ATAM",
-	"license": "MIT"
+	"license": "MIT",
+	"dependencies": {
+		"patch-package": "^8.0.0"
+	}
 }
