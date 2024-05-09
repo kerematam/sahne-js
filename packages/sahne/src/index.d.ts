@@ -141,7 +141,7 @@ export type OnResponseParams = {
 	/**
 	 * The response object.
 	 */
-	responseRaw: any;
+	responseRaw: Response;
 	/**
 	 * The action object.
 	 */
