@@ -2,9 +2,9 @@
 const { program } = require('commander');
 const { readConfig, ConfigLoaderError } = require('@web/config-loader');
 
-async function loadConfig() {
+async function loadConfig(customFile) {
 	try {
-		const config = await readConfig('sahne.config');
+		const config = await readConfig('sahne.config', customFile);
 		return config;
 	} catch (error) {
 		if (error instanceof ConfigLoaderError) {
@@ -22,15 +22,11 @@ async function loadModule() {
 }
 
 program
-	.version('1.0.0-rc.7')
-	// TODO: add options to the CLI
-	// .option(
-	//   "-t, --target <target>",
-	//   "URL origin to the target server that requests will be intercepted and proxied from"
-	// )
+	.version('1.0.0')
+	.option('-f, --file <file>', 'config file to use')
 	.action(async (commandConfigs) => {
 		const run = await loadModule();
-		const fileConfigs = await loadConfig();
+		const fileConfigs = await loadConfig(commandConfigs.file);
 		const configs = { ...commandConfigs, ...fileConfigs };
 		run(configs);
 	});
