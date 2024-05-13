@@ -141,7 +141,7 @@ export type OnResponseParams = {
 	/**
 	 * The response object.
 	 */
-	responseRaw: Response;
+	responseRaw?: Response;
 	/**
 	 * The action object.
 	 */
@@ -164,7 +164,7 @@ export type ActionOnResponseParams = {
 	/**
 	 * The response object.
 	 */
-	responseRaw: Response;
+	responseRaw?: Response;
 	/**
 	 * The request object.
 	 */
@@ -283,11 +283,11 @@ export type FileConfig = {
 	file: string | ((requestUrl: string, request: HTTPRequest) => string);
 	/**
 	 * The function to be called when the file read fails.
-	 * @param {Error} error - The error object.
+	 * @param {unknown} error - The error object.
 	 * @param {HTTPRequest} request - The intercepted request.
 	 * @returns {void}
 	 */
-	onFileReadFail?: (error: Error, request: HTTPRequest) => void;
+	onFileReadFail?: (error: unknown, request: HTTPRequest) => void;
 };
 
 export type ProxyConfig = {
@@ -306,7 +306,7 @@ export type ProxyConfig = {
 	 * @param {HTTPRequest} request - The intercepted request.
 	 * @returns {void}
 	 */
-	onProxyFail?: (error: Error, request: HTTPRequest) => void;
+	onProxyFail?: (error: unknown, request: HTTPRequest) => void;
 	/**
 	 * Rewrite the path before sending the request to the proxy target.
 	 * @param {string} path - The original path of the request.

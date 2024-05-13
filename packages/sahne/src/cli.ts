@@ -5,7 +5,7 @@ import { readFileSync } from 'fs';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
-async function loadConfig(customFile) {
+async function loadConfig(customFile: string) {
 	try {
 		const config = await readConfig('sahne.config', customFile);
 		return config;
