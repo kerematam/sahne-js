@@ -1,6 +1,8 @@
 import urlMatches from './urlMatches';
 import fs from 'fs';
 import fetch from 'node-fetch';
+import cliColors from './cliColors';
+
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
 import type { CommonConfig, ConfigForFile, Match, ProxyConfig } from '../types';
 import type { RequestInit, Response } from 'node-fetch';
@@ -63,9 +65,6 @@ export const makeHandleProxy = ({
 
 	return handleProxyUrl;
 };
-
-type OverrideFunction<T, U> = (param: T, options: U) => T;
-type OverrideObject<T> = Partial<T>;
 
 interface Options {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -193,12 +192,7 @@ export const handleOverrideResponse = async ({
 		response.headers as ResponseForRequest['headers'],
 		additionalParams
 	);
-	const body = overrideParam(
-		overrideResponseBody,
-		response.body, // response.body as ResponseForRequest['body'],
-		additionalParams,
-		true
-	);
+	const body = overrideParam(overrideResponseBody, response.body, additionalParams, true);
 
 	return { ...responseOptions, headers, body };
 };
@@ -549,9 +543,8 @@ const handleProxyRequest = async ({
 		return { response, responseRaw };
 	} catch (error) {
 		onProxyFail?.(error, interceptedRequest);
-		console.log('Error:', error);
-		const errorMessage = `Error on proxy request ${interceptedRequest.url()}. Are you sure proxy server is running?`;
-		console.error(errorMessage);
+		const errorMessage = `Error during proxy request to ${interceptedRequest.url()}. Please ensure the proxy server is running.`;
+		console.error(cliColors.bg.red, errorMessage, cliColors.reset);
 
 		return {
 			response: {
@@ -584,13 +577,17 @@ export const handleFileRequest = async ({
 		return { response };
 	} catch (error) {
 		onFileReadFail?.(error, interceptedRequest);
+		const errorMessage = `Error during reading file ${path}.`;
+		console.error(cliColors.bg.red, errorMessage, cliColors.reset);
+
 		// TODO: add better error handling
 		const response = {
-			body: `Sahne Error: Could not read file ${file}, ${error}`,
+			body: `Error: Could not read file ${file}, ${error}`,
 			status: 500,
 			headers: {},
 			contentType: ''
 		};
+
 		return { response };
 	}
 };
@@ -619,29 +616,22 @@ export const handleRequest = async ({
 	onFileReadFail?: ConfigForFile['onFileReadFail'];
 }): // TODO: make conditional type definition according to the file parameter
 Promise<{ response: ResponseForRequest; responseRaw?: Response }> => {
-	let response, responseRaw;
-
 	if (file) {
-		const fileResponse = await handleFileRequest({ file, interceptedRequest, onFileReadFail });
-		response = fileResponse.response;
+		const { response } = await handleFileRequest({ file, interceptedRequest, onFileReadFail });
 
 		return { response };
-		// return await handleFileRequest({ file, interceptedRequest, onFileReadFail });
+	} else {
+		const { response, responseRaw } = await handleProxyRequest({
+			pathRewrite,
+			overrideRequestOptions,
+			overrideRequestBody,
+			overrideRequestHeaders,
+			interceptedRequest,
+			urlRewrite,
+			handlers,
+			onProxyFail
+		});
+
+		return { response, responseRaw };
 	}
-
-	const proxyResponse = await handleProxyRequest({
-		pathRewrite,
-		overrideRequestOptions,
-		overrideRequestBody,
-		overrideRequestHeaders,
-		interceptedRequest,
-		urlRewrite,
-		handlers,
-		onProxyFail
-	});
-
-	response = proxyResponse.response;
-	responseRaw = proxyResponse.responseRaw;
-
-	return { response, responseRaw };
 };
