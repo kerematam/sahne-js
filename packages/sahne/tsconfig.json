@@ -8,6 +8,7 @@
 		"moduleResolution": "node",
 		"types": ["node"],
 		"resolveJsonModule": true,
+		"downlevelIteration": true,
 		"strict": true
 	},
 	"include": ["src/**/*"]
