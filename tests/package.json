@@ -6,9 +6,10 @@
 	"scripts": {
 		"server:dev-app": "npm run dev --workspace vite-dev-app",
 		"server:prod-app": "npm run start --workspace vite-prod-app",
-    "start:servers": "run-p server:*",
-		"run:sahne-test": "npm run test --workspace sahne",
-		"run:test": "run-p start:servers run:sahne-test"
+    "test:cli-features": "npm run test:cli-features --workspace sahne",
+    "test:api-features": "npm run test --workspace sahne",
+		"test": "run-p server:* test:*",
+    "test:ci" : "run-p server:* & npm-p test:*"
 	},
 	"workspaces": [
 		"sahne",

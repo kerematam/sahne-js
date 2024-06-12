@@ -40,7 +40,6 @@ describe('Sahne Proxy', () => {
 		});
 
 		await page.goto('http://localhost:8080');
-		// wait for the request to be completed
 		await page.waitForResponse(
 			(response) => response.url().includes('/api/todos') && response.status() === 200
 		);
