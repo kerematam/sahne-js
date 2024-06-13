@@ -9,14 +9,7 @@ module.exports = [
 	{
 		// Configuration for the CLI
 		input: 'src/cli.ts', // Your CLI entry point
-		plugins: [
-			builtins(),
-			peerDepsExternal(),
-			nodeResolve(),
-			commonjs(),
-			typescript(),
-			json()
-		],
+		plugins: [builtins(), peerDepsExternal(), nodeResolve(), commonjs(), typescript(), json()],
 		external: ['fs', '@web/config-loader'],
 		output: [
 			{
@@ -40,7 +33,7 @@ module.exports = [
 	{
 		// Configuration for the library
 		input: 'src/index.ts', // Main library entry point
-		plugins: [peerDepsExternal(), nodeResolve(), commonjs(), typescript()],
+		plugins: [peerDepsExternal(), nodeResolve({ preferBuiltins: true }), commonjs(), typescript()],
 		output: [
 			{
 				dir: './dist',
