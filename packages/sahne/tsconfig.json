@@ -7,7 +7,9 @@
 		"esModuleInterop": true,
 		"moduleResolution": "node",
 		"types": ["node"],
-		"resolveJsonModule": true
+		"resolveJsonModule": true,
+		"downlevelIteration": true,
+		"strict": true
 	},
 	"include": ["src/**/*"]
 }

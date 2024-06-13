@@ -1,11 +1,12 @@
-// @ts-check
-import urlMatches from './urlMatches.mjs';
+import urlMatches from './urlMatches';
 import fs from 'fs';
 import fetch from 'node-fetch';
+import cliColors from './cliColors';
+import { Buffer } from 'buffer';
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
 import type { CommonConfig, ConfigForFile, Match, ProxyConfig } from '../types';
-import type { HandleProxyUrl } from './types';
 import type { RequestInit, Response } from 'node-fetch';
+import type { HandleProxyUrl } from './types';
 
 type ProxyType = ProxyConfig['proxy'];
 
@@ -18,7 +19,7 @@ export const isRequestHandled = (interceptedRequest: HTTPRequest): boolean =>
  * @param {Object} options - The options for creating the handle proxy function.
  * @param {undefined|string|Function} options.proxy - The proxy URL or a function that modifies the request URL.
  * @param {import("puppeteer").HTTPRequest} options.interceptedRequest - The intercepted request object.
- * @returns {import("./types").HandleProxyUrl} The handle proxy function.
+ * @returns {HandleProxyUrl} The handle proxy function.
  */
 export const makeHandleProxy = ({
 	proxy,
@@ -34,7 +35,7 @@ export const makeHandleProxy = ({
 	const proxyUrlParsed = new URL(proxy);
 	const proxyUrlSearch = new URLSearchParams(proxyUrlParsed.search);
 
-	const handleProxyUrl = (requestUrl) => {
+	const handleProxyUrl = (requestUrl: string) => {
 		const requestUrlParsed = new URL(requestUrl);
 
 		if (requestUrlParsed.protocol !== proxyUrlParsed.protocol) {
@@ -65,9 +66,6 @@ export const makeHandleProxy = ({
 	return handleProxyUrl;
 };
 
-type OverrideFunction<T, U> = (param: T, options?: U) => T;
-type OverrideObject<T> = Partial<T>;
-
 interface Options {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	[key: string]: any;
@@ -80,7 +78,7 @@ interface Options {
  * @template T - Type of the primary parameter.
  * @template U - Type of the options parameter (optional).
  *
- * @param {OverrideFunction<T, U> | OverrideObject<T> | undefined} override - A function or an object used to override the primary parameter, or undefined.
+ * @param {Function | object | undefined | null | string} override - A function or an object used to override the primary parameter, or undefined.
  * @param {T} param - The primary parameter to be modified or overridden.
  * @param {U} [options] - Optional additional data passed to the override function.
  * @param {boolean} [isReplace=false] - If true, the override will replace the entire primary parameter.
@@ -89,18 +87,24 @@ interface Options {
  * @throws {Error} If the `override` is not a function or an object.
  */
 function overrideParam<T, U = Options>(
-	override: OverrideFunction<T, U> | OverrideObject<T> | undefined,
+	override: Function | object | undefined | null | string,
 	param: T,
-	options?: U,
+	options: U,
 	isReplace: boolean = false
 ): T {
-	if (override === undefined) return param;
+	if (override === undefined) return param as T;
 
-	if (typeof override === 'function') return override(param, options);
+	if (typeof override === 'function') {
+		return override(param as (param: T, options: U) => T, options as U) as T;
+	}
 
-	if (isReplace) return override as T;
+	if (typeof override === 'object' && !isReplace) {
+		return { ...param, ...(override as Partial<T>) } as T;
+	}
 
-	if (typeof override === 'object') return { ...param, ...override };
+	if (isReplace) {
+		return override as T;
+	}
 
 	throw new Error(`override should be a function or an object. It is ${typeof override}.`);
 }
@@ -112,7 +116,7 @@ const handleAction = async <T = object>({
 	action
 }: {
 	name: string;
-	conditionFn: (params: T) => boolean;
+	conditionFn?: (params: T) => boolean;
 	params: T;
 	action: (params: T) => void;
 }): Promise<void> => {
@@ -141,24 +145,21 @@ export const handleOverrideRequest = ({
 	interceptedRequest,
 	proxyUrl
 }: {
-	overrideRequestOptions: ProxyConfig['overrideRequestOptions'] | undefined;
-	overrideRequestBody: ProxyConfig['overrideRequestBody'];
-	overrideRequestHeaders: ProxyConfig['overrideRequestHeaders'];
+	overrideRequestOptions?: ProxyConfig['overrideRequestOptions'];
+	overrideRequestBody?: ProxyConfig['overrideRequestBody'];
+	overrideRequestHeaders?: ProxyConfig['overrideRequestHeaders'];
 	interceptedRequest: HTTPRequest;
 	proxyUrl: string;
 }): RequestInit => {
 	const param = {
 		method: interceptedRequest.method(),
-		headers: interceptedRequest.headers(),
+		headers: interceptedRequest.headers() as Record<string, string>,
 		body: interceptedRequest.postData()
 	};
 
 	const additionalParams = { request: interceptedRequest, proxyUrl };
-	const requestOptions = overrideParam(
-		overrideRequestOptions,
-		param as Partial<RequestInit> | undefined,
-		additionalParams
-	);
+
+	const requestOptions = overrideParam(overrideRequestOptions, param, additionalParams);
 	const headers = overrideParam(overrideRequestHeaders, param.headers, additionalParams);
 	const body = overrideParam(overrideRequestBody, param.body, additionalParams, true);
 
@@ -174,7 +175,7 @@ export const handleOverrideResponse = async ({
 	interceptedRequest
 }: {
 	response: ResponseForRequest;
-	responseRaw: Response;
+	responseRaw?: Response;
 	overrideResponseHeaders?: CommonConfig['overrideResponseHeaders'];
 	overrideResponseBody?: CommonConfig['overrideResponseBody'];
 	overrideResponseOptions?: CommonConfig['overrideResponseOptions'];
@@ -191,12 +192,7 @@ export const handleOverrideResponse = async ({
 		response.headers as ResponseForRequest['headers'],
 		additionalParams
 	);
-	const body = overrideParam(
-		overrideResponseBody,
-		response.body as ResponseForRequest['body'],
-		additionalParams,
-		true
-	);
+	const body = overrideParam(overrideResponseBody, response.body, additionalParams, true);
 
 	return { ...responseOptions, headers, body };
 };
@@ -221,7 +217,7 @@ export const handleResponse = async ({
 	interceptedRequest: HTTPRequest;
 	response: ResponseForRequest;
 	responseRaw?: Response;
-	onResponse?: CommonConfig['onResponse'];
+	onResponse: CommonConfig['onResponse'];
 	overrideResponseHeaders?: CommonConfig['overrideResponseHeaders'];
 	overrideResponseBody?: CommonConfig['overrideResponseBody'];
 	overrideResponseOptions?: CommonConfig['overrideResponseOptions'];
@@ -295,7 +291,7 @@ export const handleMatch = ({
 	if (match === undefined) return undefined;
 
 	const matches = Array.isArray(match) ? match : [match];
-	const matchChecker = (match) =>
+	const matchChecker = (match: Match) =>
 		urlMatches({
 			parsedUrl: new URL(url),
 			baseUrl,
@@ -524,7 +520,7 @@ const handleProxyRequest = async ({
 	urlRewrite: ProxyConfig['urlRewrite'];
 	handlers: { handleProxyUrl: HandleProxyUrl };
 	onProxyFail?: ProxyConfig['onProxyFail'];
-}): Promise<{ response?: ResponseForRequest; responseRaw?: Response }> => {
+}): Promise<{ response: ResponseForRequest; responseRaw?: Response }> => {
 	const proxyUrl = handleProxyUrl({
 		requestUrl: interceptedRequest.url(),
 		handleProxyUrl: handlers.handleProxyUrl,
@@ -547,8 +543,31 @@ const handleProxyRequest = async ({
 		return { response, responseRaw };
 	} catch (error) {
 		onProxyFail?.(error, interceptedRequest);
+		console.error(
+			cliColors.bg.red,
+			'Error:',
+			cliColors.reset,
+			`Failed to make proxy request to:`,
+			cliColors.fg.cyan,
+			proxyUrl,
+			cliColors.reset,
+			`while intercepting request:`,
+			cliColors.fg.cyan,
+			interceptedRequest.url(),
+			cliColors.reset
+		);
+		console.log(`\nPlease ensure that:`);
+		console.log(`  - proxy server is running at ${proxyUrl}.`);
+		console.log(`  - proxy rule is valid for ${interceptedRequest.url()}.`);
+		console.log('\n');
+
 		return {
-			response: undefined,
+			response: {
+				body: `Failed during proxy request to ${interceptedRequest.url()}.`,
+				status: 500,
+				headers: {},
+				contentType: ''
+			},
 			responseRaw: undefined
 		};
 	}
@@ -573,13 +592,17 @@ export const handleFileRequest = async ({
 		return { response };
 	} catch (error) {
 		onFileReadFail?.(error, interceptedRequest);
+		const errorMessage = `Error during reading file ${path}.`;
+		console.error(cliColors.bg.red, errorMessage, cliColors.reset);
+
 		// TODO: add better error handling
 		const response = {
-			body: `Sahne Error: Could not read file ${file}, ${error}`,
+			body: `Error: Could not read file ${file}, ${error}`,
 			status: 500,
 			headers: {},
 			contentType: ''
 		};
+
 		return { response };
 	}
 };
@@ -595,20 +618,35 @@ export const handleRequest = async ({
 	handlers,
 	onProxyFail,
 	onFileReadFail
+}: {
+	file?: ConfigForFile['file'];
+	pathRewrite: ProxyConfig['pathRewrite'];
+	overrideRequestOptions: ProxyConfig['overrideRequestOptions'];
+	overrideRequestBody: ProxyConfig['overrideRequestBody'];
+	overrideRequestHeaders: ProxyConfig['overrideRequestHeaders'];
+	interceptedRequest: HTTPRequest;
+	urlRewrite: ProxyConfig['urlRewrite'];
+	handlers: { handleProxyUrl: HandleProxyUrl };
+	onProxyFail?: ProxyConfig['onProxyFail'];
+	onFileReadFail?: ConfigForFile['onFileReadFail'];
 }): // TODO: make conditional type definition according to the file parameter
-Promise<{ response?: ResponseForRequest; responseRaw?: Response }> => {
+Promise<{ response: ResponseForRequest; responseRaw?: Response }> => {
 	if (file) {
-		return await handleFileRequest({ file, interceptedRequest, onFileReadFail });
-	}
+		const { response } = await handleFileRequest({ file, interceptedRequest, onFileReadFail });
 
-	return await handleProxyRequest({
-		pathRewrite,
-		overrideRequestOptions,
-		overrideRequestBody,
-		overrideRequestHeaders,
-		interceptedRequest,
-		urlRewrite,
-		handlers,
-		onProxyFail
-	});
+		return { response };
+	} else {
+		const { response, responseRaw } = await handleProxyRequest({
+			pathRewrite,
+			overrideRequestOptions,
+			overrideRequestBody,
+			overrideRequestHeaders,
+			interceptedRequest,
+			urlRewrite,
+			handlers,
+			onProxyFail
+		});
+
+		return { response, responseRaw };
+	}
 };
