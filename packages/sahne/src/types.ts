@@ -1,6 +1,12 @@
 // @ts-check
 import type { RequestInit, Response } from 'node-fetch';
-import type { HTTPRequest, PuppeteerLaunchOptions, ResponseForRequest } from 'puppeteer';
+import type {
+	Browser,
+	HTTPRequest,
+	Page,
+	PuppeteerLaunchOptions,
+	ResponseForRequest
+} from 'puppeteer';
 import type { GoToOptions } from 'puppeteer';
 
 import type { URL } from 'url';
@@ -30,6 +36,15 @@ export declare interface SahneConfig {
 	 * The interceptor config to be used.
 	 */
 	interceptor?: Interceptor | Interceptor[];
+	/**
+	 * Callbacks to be called before and after the launch and goto methods of Puppeteer.
+	 */
+	callback?: {
+		beforeLaunch?: () => void;
+		afterLaunch?: (browser: Browser) => void;
+		beforeGoto?: (browser: Browser, page: Page) => void;
+		afterGoto?: (browser: Browser, page: Page) => void;
+	};
 }
 
 export type RequestHeaders = ReturnType<HTTPRequest['headers']>;

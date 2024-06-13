@@ -9,7 +9,7 @@ import { HandleProxyUrl } from './utils/types';
 // - https://stackoverflow.com/questions/72390154/econnrefused-when-making-a-request-to-localhost-using-fetch-in-node-js
 setDefaultResultOrder('ipv4first');
 
-const handleInterception = async (
+export const handleInterception = async (
 	interceptedRequest: HTTPRequest,
 	config: Interceptor,
 	handlers: { handleProxyUrl: HandleProxyUrl }
@@ -81,7 +81,7 @@ const handleInterception = async (
 	});
 };
 
-const handleInterceptions = async (
+export const handleInterceptions = async (
 	interceptedRequest: HTTPRequest,
 	allConfigs: (Interceptor | undefined)[]
 ): Promise<void> => {
@@ -89,6 +89,7 @@ const handleInterceptions = async (
 		if (config === undefined) return;
 		if (interceptedRequest.isInterceptResolutionHandled()) break;
 
+		// TODO: rise this, and call this once with singleton instance
 		const handleProxyUrl = makeHandleProxy({ proxy: config.proxy, interceptedRequest });
 		const handlers = { handleProxyUrl };
 		await handleInterception(interceptedRequest, config, handlers);
@@ -106,13 +107,16 @@ export const run = async ({
 		goto: {},
 		launch: {}
 	},
-	interceptor
+	interceptor,
+	callback = {}
 }: SahneConfig): Promise<void> => {
+	await callback.beforeLaunch?.();
 	const browser = await puppeteer.launch({
 		defaultViewport: null,
 		headless: false,
 		...puppeteerOptions.launch
 	});
+	await callback.afterLaunch?.(browser);
 
 	const [page] = await browser.pages();
 	await page.setViewport({ width: 0, height: 0 });
@@ -120,9 +124,13 @@ export const run = async ({
 
 	const allConfigs = Array.isArray(interceptor) ? interceptor : [interceptor];
 
+	// const handleInceptions = new Interceptors();
+
 	page.on('request', (interceptedRequest) => {
 		handleInterceptions(interceptedRequest, allConfigs);
 	});
 
+	await callback.beforeGoto?.(browser, page);
 	await page.goto(initialUrl, puppeteerOptions.goto);
+	await callback.afterGoto?.(browser, page);
 };
