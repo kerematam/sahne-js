@@ -2,7 +2,7 @@ import urlMatches from './urlMatches';
 import fs from 'fs';
 import fetch from 'node-fetch';
 import cliColors from './cliColors';
-
+import { Buffer } from 'buffer';
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
 import type { CommonConfig, ConfigForFile, Match, ProxyConfig } from '../types';
 import type { RequestInit, Response } from 'node-fetch';
@@ -543,12 +543,27 @@ const handleProxyRequest = async ({
 		return { response, responseRaw };
 	} catch (error) {
 		onProxyFail?.(error, interceptedRequest);
-		const errorMessage = `Error during proxy request to ${interceptedRequest.url()}. Please ensure the proxy server is running.`;
-		console.error(cliColors.bg.red, errorMessage, cliColors.reset);
+		console.error(
+			cliColors.bg.red,
+			'Error:',
+			cliColors.reset,
+			`Failed to make proxy request to:`,
+			cliColors.fg.cyan,
+			proxyUrl,
+			cliColors.reset,
+			`while intercepting request:`,
+			cliColors.fg.cyan,
+			interceptedRequest.url(),
+			cliColors.reset
+		);
+		console.log(`\nPlease ensure that:`);
+		console.log(`  - proxy server is running at ${proxyUrl}.`);
+		console.log(`  - proxy rule is valid for ${interceptedRequest.url()}.`);
+		console.log('\n');
 
 		return {
 			response: {
-				body: errorMessage,
+				body: `Failed during proxy request to ${interceptedRequest.url()}.`,
 				status: 500,
 				headers: {},
 				contentType: ''
