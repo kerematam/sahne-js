@@ -1,6 +1,7 @@
+// @ts-check
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import puppeteer from 'puppeteer';
-import { handleInterceptions } from 'sahne-js';
+import { Interceptor } from 'sahne-js';
 
 const target = 'http://localhost:8080';
 const devTarget = 'http://localhost:5173';
@@ -35,8 +36,9 @@ describe('Sahne Proxy', () => {
 		});
 		page = await browser.newPage();
 		await page.setRequestInterception(true);
+		const interceptor = new Interceptor(configs);
 		page.on('request', (interceptedRequest) => {
-			handleInterceptions(interceptedRequest, configs);
+			interceptor.handleRequest(interceptedRequest);
 		});
 
 		await page.goto('http://localhost:8080');

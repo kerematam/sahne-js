@@ -1,8 +1,7 @@
 import puppeteer, { HTTPRequest } from 'puppeteer';
-import { Interceptor, SahneConfig } from './types';
+import { InterceptorConfig, SahneConfig, ProcessedInterceptorConfig } from './types';
 import { makeHandleProxy, handleResponse, handleRequestConfig, handleRequest } from './utils';
 import { setDefaultResultOrder } from 'node:dns';
-import { HandleProxyUrl } from './utils/types';
 
 // CAVEAT: This is fix for the following issue:
 // - https://github.com/node-fetch/node-fetch/issues/1624
@@ -11,8 +10,7 @@ setDefaultResultOrder('ipv4first');
 
 export const handleInterception = async (
 	interceptedRequest: HTTPRequest,
-	config: Interceptor,
-	handlers: { handleProxyUrl: HandleProxyUrl }
+	config: ProcessedInterceptorConfig
 ): Promise<void> => {
 	const {
 		match,
@@ -40,7 +38,8 @@ export const handleInterception = async (
 		overrideResponseOptions,
 
 		onProxyFail,
-		onFileReadFail
+		onFileReadFail,
+		handlers
 	} = config;
 
 	const isRequestHandled = await handleRequestConfig({
@@ -81,25 +80,40 @@ export const handleInterception = async (
 	});
 };
 
-export const handleInterceptions = async (
-	interceptedRequest: HTTPRequest,
-	allConfigs: (Interceptor | undefined)[]
-): Promise<void> => {
-	for (const config of allConfigs) {
-		if (config === undefined) return;
-		if (interceptedRequest.isInterceptResolutionHandled()) break;
+export class Interceptor {
+	#configs: ProcessedInterceptorConfig[] = [];
 
-		// TODO: rise this, and call this once with singleton instance
-		const handleProxyUrl = makeHandleProxy({ proxy: config.proxy, interceptedRequest });
-		const handlers = { handleProxyUrl };
-		await handleInterception(interceptedRequest, config, handlers);
+	constructor(configs: InterceptorConfig | InterceptorConfig[]) {
+		const allConfigs = this.#preProcessConfigs(configs);
+		this.#configs = allConfigs;
 	}
 
-	// INFO: Fallback if not handled
-	if (!interceptedRequest.isInterceptResolutionHandled()) {
-		await interceptedRequest.continue();
-	}
-};
+	#preProcessConfigs = (
+		configs?: InterceptorConfig | InterceptorConfig[]
+	): ProcessedInterceptorConfig[] => {
+		if (configs === undefined) return [];
+		let allConfigs = Array.isArray(configs) ? configs : [configs];
+
+		return allConfigs.map((config) => ({
+			...config,
+			handlers: { handleProxyUrl: makeHandleProxy({ proxy: config.proxy }) }
+		}));
+	};
+
+	handleRequest = async (interceptedRequest: HTTPRequest): Promise<void> => {
+		for (const config of this.#configs) {
+			if (config === undefined) return;
+			if (interceptedRequest.isInterceptResolutionHandled()) break;
+
+			await handleInterception(interceptedRequest, config);
+		}
+
+		// INFO: Fallback if not handled
+		if (!interceptedRequest.isInterceptResolutionHandled()) {
+			await interceptedRequest.continue();
+		}
+	};
+}
 
 export const run = async ({
 	initialUrl,
@@ -107,7 +121,7 @@ export const run = async ({
 		goto: {},
 		launch: {}
 	},
-	interceptor,
+	interceptor: config,
 	callback = {}
 }: SahneConfig): Promise<void> => {
 	await callback.beforeLaunch?.();
@@ -122,13 +136,12 @@ export const run = async ({
 	await page.setViewport({ width: 0, height: 0 });
 	await page.setRequestInterception(true);
 
-	const allConfigs = Array.isArray(interceptor) ? interceptor : [interceptor];
-
-	// const handleInceptions = new Interceptors();
-
-	page.on('request', (interceptedRequest) => {
-		handleInterceptions(interceptedRequest, allConfigs);
-	});
+	if (config !== undefined) {
+		const interceptor = new Interceptor(config);
+		page.on('request', (interceptedRequest) => {
+			interceptor.handleRequest(interceptedRequest);
+		});
+	}
 
 	await callback.beforeGoto?.(browser, page);
 	await page.goto(initialUrl, puppeteerOptions.goto);

@@ -21,17 +21,15 @@ export const isRequestHandled = (interceptedRequest: HTTPRequest): boolean =>
  * @param {import("puppeteer").HTTPRequest} options.interceptedRequest - The intercepted request object.
  * @returns {HandleProxyUrl} The handle proxy function.
  */
-export const makeHandleProxy = ({
-	proxy,
-	interceptedRequest
-}: {
-	proxy: ProxyType;
-	interceptedRequest: HTTPRequest;
-}): HandleProxyUrl => {
+export const makeHandleProxy = ({ proxy }: { proxy: ProxyType }): HandleProxyUrl => {
 	if (proxy === undefined) return (requestUrl) => requestUrl;
 
-	if (typeof proxy === 'function') return (requestUrl) => proxy(requestUrl, interceptedRequest);
+	if (typeof proxy === 'function') {
+		const handleProxyUrl = (requestUrl: string, interceptedRequest: HTTPRequest) =>
+			proxy(requestUrl, interceptedRequest);
 
+		return handleProxyUrl;
+	}
 	const proxyUrlParsed = new URL(proxy);
 	const proxyUrlSearch = new URLSearchParams(proxyUrlParsed.search);
 
@@ -495,7 +493,7 @@ export const handleProxyUrl = ({
 	urlRewrite: ProxyConfig['urlRewrite'];
 	interceptedRequest: HTTPRequest;
 }): string => {
-	let proxyUrl = handleProxyUrl(requestUrl);
+	let proxyUrl = handleProxyUrl(requestUrl, interceptedRequest);
 	proxyUrl = handleUrlRewrite({ urlRewrite, proxyUrl, interceptedRequest });
 	proxyUrl = handlePathRewrite({ pathRewrite, proxyUrl, interceptedRequest });
 
