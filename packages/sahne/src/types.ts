@@ -8,6 +8,7 @@ import type {
 	ResponseForRequest
 } from 'puppeteer';
 import type { GoToOptions } from 'puppeteer';
+import type { HandleProxyUrl } from './utils/types';
 
 import type { URL } from 'url';
 
@@ -35,7 +36,7 @@ export declare interface SahneConfig {
 	/**
 	 * The interceptor config to be used.
 	 */
-	interceptor?: Interceptor | Interceptor[];
+	interceptor?: InterceptorConfig | InterceptorConfig[];
 	/**
 	 * Callbacks to be called before and after the launch and goto methods of Puppeteer.
 	 */
@@ -362,4 +363,8 @@ export type ConfigForProxy = CommonConfig & AllPropsNever<FileConfig> & ProxyCon
 
 export type ConfigForFile = CommonConfig & AllPropsNever<ProxyConfig> & FileConfig;
 
-export type Interceptor = ConfigForProxy | ConfigForFile;
+export type InterceptorConfig = ConfigForProxy | ConfigForFile;
+
+export type ProcessedInterceptorConfig = InterceptorConfig & {
+	handlers: { handleProxyUrl: HandleProxyUrl };
+};

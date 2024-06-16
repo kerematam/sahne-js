@@ -1,3 +1,3 @@
-export { handleInterceptions } from './run';
+export { Interceptor } from './run';
 
 export { defineConfig } from './defineConfig';
