@@ -1,8 +1,8 @@
 import urlMatches from './urlMatches';
 import fs from 'fs';
 import fetch from 'node-fetch';
-import cliColors from './cliColors';
 import { Buffer } from 'buffer';
+import { logProxyRequestError, logProxyRequestSuccess, logger } from './logger';
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
 import type { CommonConfig, ConfigForFile, Match, ProxyConfig } from '../types';
 import type { RequestInit, Response } from 'node-fetch';
@@ -271,7 +271,9 @@ export const handleResponse = async ({
 	});
 	if (isHandledOnResponse) return true;
 	await interceptedRequest.respond(respondOptions);
-
+	logProxyRequestSuccess({
+		requestUrl: interceptedRequest.url()
+	});
 	return false;
 };
 
@@ -541,23 +543,7 @@ const handleProxyRequest = async ({
 		return { response, responseFromProxyRequest };
 	} catch (error) {
 		onError?.(error, interceptedRequest);
-		console.error(
-			cliColors.bg.red,
-			'Error:',
-			cliColors.reset,
-			`Failed to make proxy request to:`,
-			cliColors.fg.cyan,
-			proxyUrl,
-			cliColors.reset,
-			`while intercepting request:`,
-			cliColors.fg.cyan,
-			interceptedRequest.url(),
-			cliColors.reset
-		);
-		console.log(`\nPlease ensure that:`);
-		console.log(`  - proxy server is running at ${proxyUrl}.`);
-		console.log(`  - proxy rule is valid for ${interceptedRequest.url()}.`);
-		console.log('\n');
+		logProxyRequestError({ error, proxyUrl, requestUrl: interceptedRequest.url() });
 
 		return {
 			response: {
@@ -590,8 +576,8 @@ export const handleFileRequest = async ({
 		return { response };
 	} catch (error) {
 		onError?.(error, interceptedRequest);
-		const errorMessage = `Error during reading file ${path}.`;
-		console.error(cliColors.bg.red, errorMessage, cliColors.reset);
+		logger.error(`Error during reading file ${path}. \n`);
+		console.log(error);
 
 		// TODO: add better error handling
 		const response = {
