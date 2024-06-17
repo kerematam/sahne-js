@@ -166,20 +166,20 @@ export const handleOverrideRequest = ({
 
 export const handleOverrideResponse = async ({
 	response,
-	responseRaw,
+	responseFromProxyRequest,
 	overrideResponseHeaders,
 	overrideResponseBody,
 	overrideResponseOptions,
 	interceptedRequest
 }: {
 	response: ResponseForRequest;
-	responseRaw?: Response;
+	responseFromProxyRequest?: Response;
 	overrideResponseHeaders?: CommonConfig['overrideResponseHeaders'];
 	overrideResponseBody?: CommonConfig['overrideResponseBody'];
 	overrideResponseOptions?: CommonConfig['overrideResponseOptions'];
 	interceptedRequest: HTTPRequest;
 }): Promise<ResponseForRequest> => {
-	const additionalParams = { response, responseRaw, request: interceptedRequest };
+	const additionalParams = { response, responseFromProxyRequest, request: interceptedRequest };
 	const responseOptions = overrideParam(
 		overrideResponseOptions,
 		response as ResponseForRequest,
@@ -203,7 +203,7 @@ export const handleOverrideResponse = async ({
 export const handleResponse = async ({
 	interceptedRequest,
 	response,
-	responseRaw,
+	responseFromProxyRequest,
 	onResponse,
 	overrideResponseHeaders,
 	overrideResponseBody,
@@ -214,7 +214,7 @@ export const handleResponse = async ({
 }: {
 	interceptedRequest: HTTPRequest;
 	response: ResponseForRequest;
-	responseRaw?: Response;
+	responseFromProxyRequest?: Response;
 	onResponse: CommonConfig['onResponse'];
 	overrideResponseHeaders?: CommonConfig['overrideResponseHeaders'];
 	overrideResponseBody?: CommonConfig['overrideResponseBody'];
@@ -225,7 +225,7 @@ export const handleResponse = async ({
 }): Promise<boolean | undefined> => {
 	const respondOptions = await handleOverrideResponse({
 		response,
-		responseRaw,
+		responseFromProxyRequest,
 		overrideResponseHeaders,
 		overrideResponseBody,
 		overrideResponseOptions,
@@ -234,7 +234,7 @@ export const handleResponse = async ({
 	const params = {
 		request: interceptedRequest,
 		response,
-		responseRaw,
+		responseFromProxyRequest,
 		url: new URL(interceptedRequest.url())
 	};
 	await handleAction({
@@ -266,7 +266,7 @@ export const handleResponse = async ({
 	const isHandledOnResponse = await handleOnResponse({
 		onResponse,
 		interceptedRequest,
-		responseRaw,
+		responseFromProxyRequest,
 		response
 	});
 	if (isHandledOnResponse) return true;
@@ -418,12 +418,12 @@ export const handleUrlRewrite = ({
 	throw new Error(`urlRewrite is not a function. It is ${typeof urlRewrite}.`);
 };
 
-export const getResponse = async (responseRaw: Response) => {
+export const getResponse = async (responseFromProxyRequest: Response) => {
 	const response = {
-		status: responseRaw.status,
-		headers: responseRaw.headers.raw(),
-		body: Buffer.from(await responseRaw.arrayBuffer()),
-		contentType: responseRaw.headers.get('content-type') || ''
+		status: responseFromProxyRequest.status,
+		headers: responseFromProxyRequest.headers.raw(),
+		body: Buffer.from(await responseFromProxyRequest.arrayBuffer()),
+		contentType: responseFromProxyRequest.headers.get('content-type') || ''
 	};
 
 	return response;
@@ -431,12 +431,12 @@ export const getResponse = async (responseRaw: Response) => {
 
 export const handleOnResponse = async ({
 	onResponse,
-	responseRaw,
+	responseFromProxyRequest,
 	response,
 	interceptedRequest
 }: {
 	onResponse?: CommonConfig['onResponse'];
-	responseRaw?: Response;
+	responseFromProxyRequest?: Response;
 	response: ResponseForRequest;
 	interceptedRequest: HTTPRequest;
 }): Promise<boolean | undefined> => {
@@ -447,7 +447,7 @@ export const handleOnResponse = async ({
 	if (typeof onResponse === 'function') {
 		await onResponse({
 			response,
-			responseRaw,
+			responseFromProxyRequest,
 			request: interceptedRequest,
 			action: {
 				abort: () => interceptedRequest.abort(),
@@ -508,7 +508,7 @@ const handleProxyRequest = async ({
 	interceptedRequest,
 	urlRewrite,
 	handlers,
-	onProxyFail
+	onError
 }: {
 	pathRewrite: ProxyConfig['pathRewrite'];
 	overrideRequestOptions: ProxyConfig['overrideRequestOptions'];
@@ -517,8 +517,8 @@ const handleProxyRequest = async ({
 	interceptedRequest: HTTPRequest;
 	urlRewrite: ProxyConfig['urlRewrite'];
 	handlers: { handleProxyUrl: HandleProxyUrl };
-	onProxyFail?: ProxyConfig['onProxyFail'];
-}): Promise<{ response: ResponseForRequest; responseRaw?: Response }> => {
+	onError?: CommonConfig['onError'];
+}): Promise<{ response: ResponseForRequest; responseFromProxyRequest?: Response }> => {
 	const proxyUrl = handleProxyUrl({
 		requestUrl: interceptedRequest.url(),
 		handleProxyUrl: handlers.handleProxyUrl,
@@ -535,12 +535,12 @@ const handleProxyRequest = async ({
 	});
 
 	try {
-		const responseRaw = await fetch(proxyUrl, requestOptions);
-		const response = await getResponse(responseRaw);
+		const responseFromProxyRequest = await fetch(proxyUrl, requestOptions);
+		const response = await getResponse(responseFromProxyRequest);
 
-		return { response, responseRaw };
+		return { response, responseFromProxyRequest };
 	} catch (error) {
-		onProxyFail?.(error, interceptedRequest);
+		onError?.(error, interceptedRequest);
 		console.error(
 			cliColors.bg.red,
 			'Error:',
@@ -566,7 +566,7 @@ const handleProxyRequest = async ({
 				headers: {},
 				contentType: ''
 			},
-			responseRaw: undefined
+			responseFromProxyRequest: undefined
 		};
 	}
 };
@@ -574,11 +574,11 @@ const handleProxyRequest = async ({
 export const handleFileRequest = async ({
 	file,
 	interceptedRequest,
-	onFileReadFail
+	onError
 }: {
 	file: ConfigForFile['file'];
 	interceptedRequest: HTTPRequest;
-	onFileReadFail?: ConfigForFile['onFileReadFail'];
+	onError?: CommonConfig['onError'];
 }): Promise<{ response: ResponseForRequest }> => {
 	const path = handleFilePath({ file, interceptedRequest });
 	try {
@@ -589,7 +589,7 @@ export const handleFileRequest = async ({
 
 		return { response };
 	} catch (error) {
-		onFileReadFail?.(error, interceptedRequest);
+		onError?.(error, interceptedRequest);
 		const errorMessage = `Error during reading file ${path}.`;
 		console.error(cliColors.bg.red, errorMessage, cliColors.reset);
 
@@ -614,8 +614,7 @@ export const handleRequest = async ({
 	interceptedRequest,
 	urlRewrite,
 	handlers,
-	onProxyFail,
-	onFileReadFail
+	onError
 }: {
 	file?: ConfigForFile['file'];
 	pathRewrite: ProxyConfig['pathRewrite'];
@@ -625,16 +624,15 @@ export const handleRequest = async ({
 	interceptedRequest: HTTPRequest;
 	urlRewrite: ProxyConfig['urlRewrite'];
 	handlers: { handleProxyUrl: HandleProxyUrl };
-	onProxyFail?: ProxyConfig['onProxyFail'];
-	onFileReadFail?: ConfigForFile['onFileReadFail'];
+	onError?: CommonConfig['onError'];
 }): // TODO: make conditional type definition according to the file parameter
-Promise<{ response: ResponseForRequest; responseRaw?: Response }> => {
+Promise<{ response: ResponseForRequest; responseFromProxyRequest?: Response }> => {
 	if (file) {
-		const { response } = await handleFileRequest({ file, interceptedRequest, onFileReadFail });
+		const { response } = await handleFileRequest({ file, interceptedRequest, onError });
 
 		return { response };
 	} else {
-		const { response, responseRaw } = await handleProxyRequest({
+		const { response, responseFromProxyRequest } = await handleProxyRequest({
 			pathRewrite,
 			overrideRequestOptions,
 			overrideRequestBody,
@@ -642,9 +640,9 @@ Promise<{ response: ResponseForRequest; responseRaw?: Response }> => {
 			interceptedRequest,
 			urlRewrite,
 			handlers,
-			onProxyFail
+			onError
 		});
 
-		return { response, responseRaw };
+		return { response, responseFromProxyRequest };
 	}
 };

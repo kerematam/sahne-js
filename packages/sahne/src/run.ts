@@ -37,8 +37,7 @@ export const handleInterception = async (
 		overrideResponseBody,
 		overrideResponseOptions,
 
-		onProxyFail,
-		onFileReadFail,
+		onError,
 		handlers
 	} = config;
 
@@ -53,7 +52,7 @@ export const handleInterception = async (
 
 	if (isRequestHandled) return;
 
-	const { response, responseRaw } = await handleRequest({
+	const { response, responseFromProxyRequest } = await handleRequest({
 		file,
 		pathRewrite,
 		overrideRequestOptions,
@@ -62,14 +61,13 @@ export const handleInterception = async (
 		interceptedRequest,
 		urlRewrite,
 		handlers,
-		onProxyFail,
-		onFileReadFail
+		onError
 	});
 
 	await handleResponse({
 		interceptedRequest,
 		response,
-		responseRaw,
+		responseFromProxyRequest,
 		onResponse,
 		overrideResponseHeaders,
 		overrideResponseBody,
@@ -108,7 +106,7 @@ export class Interceptor {
 			await handleInterception(interceptedRequest, config);
 		}
 
-		// INFO: Fallback if not handled
+		// INFO: no interception occurs if request is not handled
 		if (!interceptedRequest.isInterceptResolutionHandled()) {
 			await interceptedRequest.continue();
 		}

@@ -97,10 +97,10 @@ export type OverrideRequestAdditionalParams = {
 	request: HTTPRequest;
 };
 
-export type ResponseRaw = Response;
+export type ResponseFromProxyRequest = Response;
 
 export type OverrideResponseAdditionalParams = {
-	responseRaw: ResponseRaw;
+	responseFromProxyRequest: ResponseFromProxyRequest;
 	response: ResponseForRequest;
 	request: HTTPRequest;
 };
@@ -116,7 +116,7 @@ export type OverrideResponseBodyFunction = (
 ) => ResponseForRequest['body'];
 
 export type OverrideResponseObject = {
-	status: ResponseRaw['status'];
+	status: ResponseFromProxyRequest['status'];
 	headers: Record<string, string>;
 	body: Buffer;
 	contentType: string;
@@ -151,13 +151,14 @@ export type OnRequestParams = {
 
 export type OnResponseParams = {
 	/**
-	 * The response object.
+	 * The response object that is processed to be supplied for the Puppeteer's
+	 * respond method.
 	 */
 	response: ResponseForRequest;
 	/**
-	 * The response object.
+	 * The raw response object from the proxy request.
 	 */
-	responseRaw?: Response;
+	responseFromProxyRequest?: Response;
 	/**
 	 * The action object.
 	 */
@@ -174,13 +175,14 @@ export type OnResponseParams = {
 
 export type ActionOnResponseParams = {
 	/**
-	 * The response object.
+	 * The response object that is processed to be supplied for the Puppeteer's
+	 * respond method.
 	 */
 	response: ResponseForRequest;
 	/**
-	 * The response object.
+	 * The raw response object from the proxy request.
 	 */
-	responseRaw?: Response;
+	responseFromProxyRequest?: Response;
 	/**
 	 * The request object.
 	 */
@@ -235,8 +237,8 @@ export type CommonConfig = {
 	 * The response method to be intercepted.
 	 * @param {OnResponseParams} params - Puppeteer's APIResponse instance.
 	 * @param {OnResponseParams['action']} params.action - Avaliable actions that can be called.
-	 * @param {OnResponseParams['response']} params.response - The intercepted response.
-	 * @param {OnResponseParams['responseRaw']} params.responseRaw - The intercepted route.
+	 * @param {OnResponseParams['response']} params.response - The response to be provided for intercepted request.
+	 * @param {OnResponseParams['responseFromProxyRequest']} params.responseFromProxyRequest - The response from the proxy request.
 	 * @param {OnResponseParams['response']} params.request - The intercepted request.
 	 * @param {OnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {void} - Returns void.
@@ -245,8 +247,8 @@ export type CommonConfig = {
 	/**
 	 * Intercepted request ignored (not intercepted) if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
-	 * @param {ActionOnResponseParams['response'] } params.response - Puppeteer's APIResponse instance.
-	 * @param {ActionOnResponseParams['responseRaw']} params.responseRaw - The intercepted route.
+	 * @param {ActionOnResponseParams['response'] } params.response - The response to be provided for intercepted request.
+	 * @param {ActionOnResponseParams['responseFromProxyRequest']} params.responseFromProxyRequest - The response from the proxy request.
 	 * @param {ActionOnResponseParams['request']} params.request - The intercepted request.
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
@@ -255,8 +257,8 @@ export type CommonConfig = {
 	/**
 	 * Intercepted response aborted if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
-	 * @param {ActionOnResponseParams['response']} params.response - Puppeteer's APIResponse instance.
-	 * @param {ActionOnResponseParams['responseRaw']} params.responseRaw - The intercepted route.
+	 * @param {ActionOnResponseParams['response']} params.response - The response to be provided for intercepted request.
+	 * @param {ActionOnResponseParams['responseFromProxyRequest']} params.responseFromProxyRequest - The response from the proxy request.
 	 * @param {ActionOnResponseParams['request']} params.request - The intercepted request.
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
@@ -265,8 +267,8 @@ export type CommonConfig = {
 	/**
 	 * Intercepted response fallbacks to next interception rule if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
-	 * @param {ActionOnResponseParams['response']} params.response - Puppeteer's APIResponse instance.
-	 * @param {ActionOnResponseParams['responseRaw']} params.responseRaw - The intercepted route.
+	 * @param {ActionOnResponseParams['response']} params.response - The response to be provided for intercepted request.
+	 * @param {ActionOnResponseParams['responseFromProxyRequest']} params.responseFromProxyRequest - The response from the proxy request.
 	 * @param {ActionOnResponseParams['request']} params.request - The intercepted request.
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
@@ -290,6 +292,13 @@ export type CommonConfig = {
 	overrideResponseOptions?:
 		| Partial<ReturnType<OverrideResponseOptionsFunction>>
 		| OverrideResponseOptionsFunction;
+	/**
+	 * The function to be called when the request handling fails.
+	 * @param {Error} error - The error object.
+	 * @param {HTTPRequest} request - The intercepted request.
+	 * @returns {void}
+	 */
+	onError?: (error: unknown, request: HTTPRequest) => void;
 };
 
 export type FileConfig = {
@@ -297,13 +306,6 @@ export type FileConfig = {
 	 * The file path to be used as the response body.
 	 */
 	file: string | ((requestUrl: string, request: HTTPRequest) => string);
-	/**
-	 * The function to be called when the file read fails.
-	 * @param {unknown} error - The error object.
-	 * @param {HTTPRequest} request - The intercepted request.
-	 * @returns {void}
-	 */
-	onFileReadFail?: (error: unknown, request: HTTPRequest) => void;
 };
 
 export type ProxyConfig = {
@@ -316,13 +318,6 @@ export type ProxyConfig = {
 	 * @example https://example.com?param=value
 	 */
 	proxy?: string | ((requestUrl: string, request: HTTPRequest) => string);
-	/**
-	 * The function to be called when the proxy request fails.
-	 * @param {Error} error - The error object.
-	 * @param {HTTPRequest} request - The intercepted request.
-	 * @returns {void}
-	 */
-	onProxyFail?: (error: unknown, request: HTTPRequest) => void;
 	/**
 	 * Rewrite the path before sending the request to the proxy target.
 	 * @param {string} path - The original path of the request.
