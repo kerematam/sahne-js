@@ -130,7 +130,7 @@ export type OverrideResponseOptionsFunction = (
 export type Action = {
 	abort: () => void;
 	respond: (params: ResponseForRequest) => void;
-	continue: () => void;
+	ignore: () => void;
 	fallback: () => void;
 };
 
@@ -362,4 +362,8 @@ export type InterceptorConfig = ConfigForProxy | ConfigForFile;
 
 export type ProcessedInterceptorConfig = InterceptorConfig & {
 	handlers: { handleProxyUrl: HandleProxyUrl };
+};
+
+export type TransferObject = {
+	puppeteer: HTTPRequest;
 };
