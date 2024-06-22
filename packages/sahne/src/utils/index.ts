@@ -2,8 +2,7 @@ import urlMatches from './urlMatches';
 import fs from 'fs';
 import fetch from 'node-fetch';
 import { Buffer } from 'buffer';
-import { logProxyRequestError, logProxyRequestSuccess, logger } from './logger';
-import Request from './Request';
+import Request from '../Request';
 
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
 import type { CommonConfig, ConfigForFile, Match, ProxyConfig, TransferObject } from '../types';
@@ -273,7 +272,6 @@ export const handleResponse = async ({
 	});
 	if (isHandledOnResponse) return true;
 	await request.respond(respondOptions);
-	logProxyRequestSuccess({ requestUrl: request.url() });
 	return false;
 };
 
@@ -287,20 +285,22 @@ export const handleMatch = ({
 	url: string;
 	match?: Match | Match[];
 	request: InstanceType<typeof Request>;
-}): boolean | undefined => {
+}): undefined | Match => {
 	if (match === undefined) return undefined;
 
 	const matches = Array.isArray(match) ? match : [match];
-	const matchChecker = (match: Match) =>
-		urlMatches({
+	const matchChecker = (match: Match) => {
+		const isMatched = urlMatches({
 			parsedUrl: new URL(url),
 			baseUrl,
 			urlString: url,
 			match,
 			request: request.transferObject()
 		});
+		if (isMatched) return match;
+	};
 
-	return matches.some(matchChecker);
+	return matches.find(matchChecker);
 };
 
 /**
@@ -327,23 +327,32 @@ export const handleRequestConfig = async ({
 	const parsedUrl = new URL(url);
 	const baseUrl = parsedUrl.origin;
 
-	const isMatched = handleMatch({ baseUrl, url, match, request }) ?? true;
-	if (!isMatched) return true;
-
-	const isIgnored = handleMatch({ baseUrl, url, match: ignore, request }) ?? false;
-	if (isIgnored) {
+	const ignoreRule = handleMatch({ baseUrl, url, match: ignore, request });
+	if (ignoreRule !== undefined) {
+		request.setStatus({ ignore: ignoreRule });
 		await request.ignore();
 		return true;
 	}
 
-	const isAborted = handleMatch({ baseUrl, url, match: abort, request }) ?? false;
-	if (isAborted) {
+	const abortRule = handleMatch({ baseUrl, url, match: abort, request });
+	if (abortRule !== undefined) {
+		request.setStatus({ abort: abortRule });
 		await request.abort();
 		return true;
 	}
 
-	const isFallback = handleMatch({ baseUrl, url, match: fallback, request }) ?? false;
-	if (isFallback) return true;
+	const fallbackRule = handleMatch({ baseUrl, url, match: fallback, request });
+	if (fallbackRule !== undefined) {
+		request.setStatus({ fallback: fallbackRule });
+		await request.fallback();
+		return true;
+	}
+
+	const matchRule = handleMatch({ baseUrl, url, match, request });
+	if (matchRule !== undefined) {
+		request.setStatus({ match: matchRule });
+		return false;
+	}
 
 	await handleOnRequest({ onRequest, request });
 	if (request.isRequestHandled()) return true;
@@ -501,7 +510,11 @@ const handleProxyRequest = async ({
 	urlRewrite: ProxyConfig['urlRewrite'];
 	handlers: { handleProxyUrl: HandleProxyUrl };
 	onError?: CommonConfig['onError'];
-}): Promise<{ response: ResponseForRequest; responseFromProxyRequest?: Response }> => {
+}): Promise<{
+	response?: ResponseForRequest;
+	responseFromProxyRequest?: Response;
+	error?: unknown;
+}> => {
 	const proxyUrl = handleProxyUrl({
 		requestUrl: request.url(),
 		handleProxyUrl: handlers.handleProxyUrl,
@@ -518,36 +531,27 @@ const handleProxyRequest = async ({
 	});
 
 	try {
+		request.setStatus({ proxyUrl, requestOptions });
 		const responseFromProxyRequest = await fetch(proxyUrl, requestOptions);
 		const response = await getResponse(responseFromProxyRequest);
 
 		return { response, responseFromProxyRequest };
 	} catch (error) {
-		onError?.(error, request.transferObject());
-		logProxyRequestError({ error, proxyUrl, requestUrl: request.url() });
+		request.log.fileReadError(error);
 
-		return {
-			response: {
-				body: `Failed during proxy request to ${request.url()}.`,
-				status: 500,
-				headers: {},
-				contentType: ''
-			},
-			responseFromProxyRequest: undefined
-		};
+		return { error };
 	}
 };
 
 export const handleFileRequest = async ({
 	file,
-	request,
-	onError
+	request
 }: {
 	file: ConfigForFile['file'];
 	request: InstanceType<typeof Request>;
-	onError?: CommonConfig['onError'];
-}): Promise<{ response: ResponseForRequest }> => {
+}): Promise<{ response?: ResponseForRequest; error?: unknown }> => {
 	const path = handleFilePath({ file, request });
+	request.setStatus({ filePath: path });
 	try {
 		const body = await fs.readFileSync(path);
 		// TODO: add better content type detection
@@ -556,20 +560,34 @@ export const handleFileRequest = async ({
 
 		return { response };
 	} catch (error) {
-		onError?.(error, request.transferObject());
-		logger.error(`Error during reading file ${path}. \n`);
-		console.log(error);
+		request.log.fileReadError(error);
 
-		// TODO: add better error handling
-		const response = {
-			body: `Error: Could not read file ${file}, ${error}`,
-			status: 500,
-			headers: {},
-			contentType: ''
-		};
-
-		return { response };
+		return { error };
 	}
+};
+
+export const handleOnError = async ({
+	request,
+	error,
+	onError
+}: {
+	request: InstanceType<typeof Request>;
+	error: unknown;
+	onError?: CommonConfig['onError'];
+}) => {
+	if (onError === undefined) return;
+
+	if (typeof onError === 'function') {
+		const response = await onError(error, {
+			request: request.transferObject(),
+			action: request.getActionMethods(),
+			url: new URL(request.url())
+		});
+
+		return response;
+	}
+
+	throw new Error(`onError is not a function. It is ${typeof onError}.`);
 };
 
 export const handleRequest = async ({
@@ -580,8 +598,7 @@ export const handleRequest = async ({
 	overrideRequestBody,
 	overrideRequestHeaders,
 	urlRewrite,
-	handlers,
-	onError
+	handlers
 }: {
 	request: InstanceType<typeof Request>;
 	file?: ConfigForFile['file'];
@@ -591,24 +608,26 @@ export const handleRequest = async ({
 	overrideRequestHeaders: ProxyConfig['overrideRequestHeaders'];
 	urlRewrite: ProxyConfig['urlRewrite'];
 	handlers: { handleProxyUrl: HandleProxyUrl };
-	onError?: CommonConfig['onError'];
-}): Promise<{ response: ResponseForRequest; responseFromProxyRequest?: Response }> => {
+}): Promise<{
+	response?: ResponseForRequest;
+	responseFromProxyRequest?: Response;
+	error?: unknown;
+}> => {
 	if (file) {
-		const { response } = await handleFileRequest({ file, request, onError });
+		const { response, error } = await handleFileRequest({ file, request });
 
-		return { response };
+		return { response, error };
 	} else {
-		const { response, responseFromProxyRequest } = await handleProxyRequest({
+		const { response, responseFromProxyRequest, error } = await handleProxyRequest({
 			request,
 			pathRewrite,
 			overrideRequestOptions,
 			overrideRequestBody,
 			overrideRequestHeaders,
 			urlRewrite,
-			handlers,
-			onError
+			handlers
 		});
 
-		return { response, responseFromProxyRequest };
+		return { response, responseFromProxyRequest, error };
 	}
 };

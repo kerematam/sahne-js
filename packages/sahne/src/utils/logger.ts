@@ -1,3 +1,5 @@
+import { Match } from '../types';
+
 export const cliColors = {
 	reset: '\x1b[0m',
 	bright: '\x1b[1m',
@@ -37,6 +39,25 @@ const red = (text: string) => cliColors.fg.red + text + cliColors.reset;
 const blue = (text: string) => cliColors.fg.blue + text + cliColors.reset;
 const green = (text: string) => cliColors.fg.green + text + cliColors.reset;
 
+const matchRuleToString = (rule?: Match) => {
+	if (typeof rule === 'string') return rule;
+	if (typeof rule === 'function') return rule.toString();
+
+	return '';
+};
+
+export const logDecorator = {
+	url: (url: string | undefined) => {
+		if (url === undefined) return '';
+		return blue(url);
+	},
+	match: (match: Match | undefined) => {
+		if (match === undefined) return '';
+		const matchStr = matchRuleToString(match);
+		return green(matchStr);
+	}
+};
+
 const error = (message: string) => {
 	console.log(`${new Date().toISOString()} ${red('error:')} ${message}`);
 };
@@ -46,31 +67,17 @@ const info = (message: string) => {
 
 export const logger = { error, info };
 
-export const logProxyRequestSuccess = ({ requestUrl }: { requestUrl: string }) => {
-	const _requestUrl = green(requestUrl);
-	const message = `request: ${_requestUrl} is handled successfully`;
-	logger.info(message);
-};
 
-export const logProxyRequestError = ({
-	error,
-	proxyUrl,
-	requestUrl
-}: {
-	error: unknown;
-	proxyUrl: string;
-	requestUrl: string;
-}) => {
-	const _proxyUrl = green(proxyUrl);
-	const _interceptedRequestUrl = blue(requestUrl);
-	const message = `Failed to make proxy request to: ${_proxyUrl} while intercepting request: ${_interceptedRequestUrl} with following error`;
-	const messages = [
-		message,
-		'\nEnsure that:',
-		`  - proxy server is running at ${_proxyUrl}.`,
-		`  - proxy rule is valid for ${_interceptedRequestUrl}.\n`
-	].join('\n');
-	logger.error(messages);
-	console.log(error);
-	console.error(error);
-};
+export function handleError(error: unknown): void {
+	if (error instanceof Error) {
+		console.error(error.message);
+		console.error(error.name);
+		console.error(error.stack);
+	} else if (typeof error === 'string') {
+		console.error(error);
+	} else if (typeof error === 'object' && error !== null) {
+		console.error(JSON.stringify(error));
+	} else {
+		console.error('Unknown error type:', error);
+	}
+}

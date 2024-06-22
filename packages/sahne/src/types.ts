@@ -295,10 +295,20 @@ export type CommonConfig = {
 	/**
 	 * The function to be called when the request handling fails.
 	 * @param {Error} error - The error object.
-	 * @param {HTTPRequest} request - The intercepted request.
+	 * @param {Object} params - Params to be passed to the function.
+	 * @param {HTTPRequest} params.request - The intercepted request.
+	 * @param {Action} params.action - Avaliable actions that can be called.
+	 * @param {URL} params.url - The URL object of the intercepted request.
 	 * @returns {void}
 	 */
-	onError?: (error: unknown, request: HTTPRequest) => void;
+	onError?: (
+		error: unknown,
+		params: {
+			request: HTTPRequest;
+			action: Action;
+			url: URL;
+		}
+	) => undefined | ResponseForRequest;
 };
 
 export type FileConfig = {

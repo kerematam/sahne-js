@@ -1,8 +1,14 @@
 import puppeteer, { HTTPRequest, Puppeteer } from 'puppeteer';
 import { InterceptorConfig, SahneConfig, ProcessedInterceptorConfig } from './types';
-import { makeHandleProxy, handleResponse, handleRequestConfig, handleRequest } from './utils';
+import {
+	makeHandleProxy,
+	handleResponse,
+	handleRequestConfig,
+	handleRequest,
+	handleOnError
+} from './utils';
 import { setDefaultResultOrder } from 'node:dns';
-import Request from './utils/Request';
+import Request from './Request';
 
 // CAVEAT: This is fix for the following issue:
 // - https://github.com/node-fetch/node-fetch/issues/1624
@@ -54,7 +60,7 @@ export const handleInterception = async (
 
 	if (isRequestHandled) return;
 
-	const { response, responseFromProxyRequest } = await handleRequest({
+	const { response, responseFromProxyRequest, error } = await handleRequest({
 		request,
 		file,
 		pathRewrite,
@@ -62,13 +68,20 @@ export const handleInterception = async (
 		overrideRequestBody,
 		overrideRequestHeaders,
 		urlRewrite,
-		handlers,
-		onError
+		handlers
 	});
+
+	let responseFromOnError;
+	if (error || !response) {
+		responseFromOnError = await handleOnError({ request, error, onError });
+		if (responseFromOnError) return;
+		if (!request.isRequestHandled) request.fallback();
+		return;
+	}
 
 	await handleResponse({
 		request,
-		response,
+		response: responseFromOnError || response,
 		responseFromProxyRequest,
 		onResponse,
 		overrideResponseHeaders,
