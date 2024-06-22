@@ -130,7 +130,7 @@ export type Action = {
 	abort: () => void;
 	respond: (params: ResponseForRequest) => void;
 	ignore: () => void;
-	fallback: () => void;
+	next: () => void;
 };
 
 export type OnRequestParams = {
@@ -224,14 +224,14 @@ export type CommonConfig = {
 	onRequest?: (param: OnRequestParams) => void;
 	/**
 	 * Intercepted request ignored (not intercepted) if the function returns true.
-	 * It will not be handled by any other following rules unlike fallback.
+	 * It will not be handled by any other following rules unlike next.
 	 */
 	abort?: Match | Match[];
 	/**
-	 * Intercepted request will fallback to next rule if the function returns
+	 * Intercepted request will next to next rule if the function returns
 	 * true and not be handled by the current one.
 	 */
-	fallback?: Match | Match[];
+	next?: Match | Match[];
 	/**
 	 * The response method to be intercepted.
 	 * @param {OnResponseParams} params - Puppeteer's APIResponse instance.
@@ -264,7 +264,7 @@ export type CommonConfig = {
 	 */
 	abortOnResponse?: (params: ActionOnResponseParams) => boolean;
 	/**
-	 * Intercepted response fallbacks to next interception rule if the function returns true.
+	 * Intercepted response nexts to next interception rule if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
 	 * @param {ActionOnResponseParams['response']} params.response - The response to be provided for intercepted request.
 	 * @param {ActionOnResponseParams['responseFromProxyRequest']} params.responseFromProxyRequest - The response from the proxy request.
@@ -272,7 +272,7 @@ export type CommonConfig = {
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
 	 */
-	fallbackOnResponse?: (params: ActionOnResponseParams) => boolean;
+	nextOnResponse?: (params: ActionOnResponseParams) => boolean;
 	/**
 	 * Overrirde response headers to be passed to Puppeteer's respond method
 	 */

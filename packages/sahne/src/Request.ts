@@ -9,12 +9,12 @@ type Status = {
 	match?: Match;
 	ignore?: Match;
 	abort?: Match;
-	fallback?: Match;
+	next?: Match;
 	requestOptions?: RequestInit;
 };
 
 class Request {
-	isFallbackCalled = false;
+	isNextCalled = false;
 	#interceptedRequest: HTTPRequest;
 
 	// TODO: add implementation
@@ -76,11 +76,11 @@ class Request {
 			handleError(error);
 		}
 	};
-	fallback = () => {
-		this.isFallbackCalled = true;
-		const fallbackRule = logDecorator.match(this.status.fallback);
+	next = () => {
+		this.isNextCalled = true;
+		const nextRule = logDecorator.match(this.status.next);
 		const requestUrl = logDecorator.url(this.url());
-		const message = `request: ${requestUrl} is NOT intercepted as it matches with fallback rule: ${fallbackRule}`;
+		const message = `request: ${requestUrl} is NOT intercepted as it matches with next rule: ${nextRule}`;
 		logger.info(message);
 	};
 
@@ -93,13 +93,13 @@ class Request {
 			abort: this.abort,
 			ignore: this.ignore,
 			respond: this.respond,
-			fallback: this.fallback
+			next: this.next
 		};
 	};
 
 	url = () => this.#interceptedRequest.url();
 	isRequestHandled = () =>
-		this.isFallbackCalled || this.#interceptedRequest.isInterceptResolutionHandled();
+		this.isNextCalled || this.#interceptedRequest.isInterceptResolutionHandled();
 
 	transferObject = () => this.#interceptedRequest;
 	method = () => this.#interceptedRequest.method();

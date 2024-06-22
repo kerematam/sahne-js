@@ -212,7 +212,7 @@ export const handleResponse = async ({
 	overrideResponseBody,
 	overrideResponseOptions,
 	ignoreOnResponse,
-	fallbackOnResponse,
+	nextOnResponse,
 	abortOnResponse
 }: {
 	request: InstanceType<typeof Request>;
@@ -223,7 +223,7 @@ export const handleResponse = async ({
 	overrideResponseBody?: CommonConfig['overrideResponseBody'];
 	overrideResponseOptions?: CommonConfig['overrideResponseOptions'];
 	ignoreOnResponse?: CommonConfig['ignoreOnResponse'];
-	fallbackOnResponse?: CommonConfig['fallbackOnResponse'];
+	nextOnResponse?: CommonConfig['nextOnResponse'];
 	abortOnResponse?: CommonConfig['abortOnResponse'];
 }): Promise<boolean | undefined> => {
 	const respondOptions = await handleOverrideResponse({
@@ -258,10 +258,10 @@ export const handleResponse = async ({
 	if (request.isRequestHandled()) return true;
 
 	await handleAction({
-		name: 'fallbackOnResponse',
-		conditionFn: fallbackOnResponse,
+		name: 'nextOnResponse',
+		conditionFn: nextOnResponse,
 		params,
-		action: request.fallback
+		action: request.next
 	});
 	if (request.isRequestHandled()) return true;
 	const isHandledOnResponse = await handleOnResponse({
@@ -313,14 +313,14 @@ export const handleRequestConfig = async ({
 	match,
 	ignore,
 	abort,
-	fallback,
+	next,
 	onRequest
 }: {
 	request: InstanceType<typeof Request>;
 	match?: Match | Match[];
 	ignore?: Match | Match[];
 	abort?: Match | Match[];
-	fallback?: Match | Match[];
+	next?: Match | Match[];
 	onRequest?: CommonConfig['onRequest'];
 }): Promise<boolean | undefined> => {
 	const url = request.url();
@@ -341,10 +341,10 @@ export const handleRequestConfig = async ({
 		return true;
 	}
 
-	const fallbackRule = handleMatch({ baseUrl, url, match: fallback, request });
-	if (fallbackRule !== undefined) {
-		request.setStatus({ fallback: fallbackRule });
-		await request.fallback();
+	const nextRule = handleMatch({ baseUrl, url, match: next, request });
+	if (nextRule !== undefined) {
+		request.setStatus({ next: nextRule });
+		await request.next();
 		return true;
 	}
 

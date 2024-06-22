@@ -28,12 +28,12 @@ export const handleInterception = async (
 		pathRewrite,
 
 		onRequest,
-		fallback,
+		next,
 		abort,
 
 		onResponse,
 		ignoreOnResponse,
-		fallbackOnResponse,
+		nextOnResponse,
 		abortOnResponse,
 
 		overrideRequestBody,
@@ -54,7 +54,7 @@ export const handleInterception = async (
 		match,
 		ignore,
 		onRequest,
-		fallback,
+		next,
 		abort
 	});
 
@@ -75,7 +75,7 @@ export const handleInterception = async (
 	if (error || !response) {
 		responseFromOnError = await handleOnError({ request, error, onError });
 		if (responseFromOnError) return;
-		if (!request.isRequestHandled) request.fallback();
+		if (!request.isRequestHandled) request.next();
 		return;
 	}
 
@@ -88,7 +88,7 @@ export const handleInterception = async (
 		overrideResponseBody,
 		overrideResponseOptions,
 		ignoreOnResponse,
-		fallbackOnResponse,
+		nextOnResponse,
 		abortOnResponse
 	});
 };
