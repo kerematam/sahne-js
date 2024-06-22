@@ -11,7 +11,7 @@ const configs = [
 		match: `${target}/**`,
 		proxy: devTarget,
 		ignore: `${target}/api/**`,
-		fallback: `${target}/fallback/**`
+		next: `${target}/fallback/**`
 	},
 	{
 		match: `${target}/fallback/**`,
