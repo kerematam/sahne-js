@@ -10,7 +10,12 @@ const configs = [
 	{
 		match: `${target}/**`,
 		proxy: devTarget,
-		ignore: `${target}/api/**`
+		ignore: `${target}/api/**`,
+		fallback: `${target}/fallback/**`
+	},
+	{
+		match: `${target}/fallback/**`,
+		file: './fallback.json'
 	}
 ];
 
