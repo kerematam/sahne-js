@@ -1,4 +1,3 @@
-// @ts-check
 import type { RequestInit, Response } from 'node-fetch';
 import type {
 	Browser,
