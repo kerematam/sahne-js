@@ -349,10 +349,8 @@ export const handleRequestConfig = async ({
 	}
 
 	const matchRule = handleMatch({ baseUrl, url, match, request });
-	if (matchRule !== undefined) {
-		request.setStatus({ match: matchRule });
-		return false;
-	}
+	if (matchRule === undefined) return true;
+	request.setStatus({ match: matchRule });
 
 	await handleOnRequest({ onRequest, request });
 	if (request.isRequestHandled()) return true;
