@@ -1,7 +1,14 @@
-import puppeteer, { HTTPRequest } from 'puppeteer';
+import puppeteer, { HTTPRequest, Puppeteer } from 'puppeteer';
 import { InterceptorConfig, SahneConfig, ProcessedInterceptorConfig } from './types';
-import { makeHandleProxy, handleResponse, handleRequestConfig, handleRequest } from './utils';
+import {
+	makeHandleProxy,
+	handleResponse,
+	handleRequestConfig,
+	handleRequest,
+	handleOnError
+} from './utils';
 import { setDefaultResultOrder } from 'node:dns';
+import Request from './Request';
 
 // CAVEAT: This is fix for the following issue:
 // - https://github.com/node-fetch/node-fetch/issues/1624
@@ -21,12 +28,12 @@ export const handleInterception = async (
 		pathRewrite,
 
 		onRequest,
-		fallback,
+		next,
 		abort,
 
 		onResponse,
 		ignoreOnResponse,
-		fallbackOnResponse,
+		nextOnResponse,
 		abortOnResponse,
 
 		overrideRequestBody,
@@ -37,45 +44,51 @@ export const handleInterception = async (
 		overrideResponseBody,
 		overrideResponseOptions,
 
-		onProxyFail,
-		onFileReadFail,
+		onError,
 		handlers
 	} = config;
 
+	const request = new Request(interceptedRequest);
 	const isRequestHandled = await handleRequestConfig({
-		interceptedRequest,
+		request,
 		match,
 		ignore,
 		onRequest,
-		fallback,
+		next,
 		abort
 	});
 
 	if (isRequestHandled) return;
 
-	const { response, responseRaw } = await handleRequest({
+	const { response, responseFromProxyRequest, error } = await handleRequest({
+		request,
 		file,
 		pathRewrite,
 		overrideRequestOptions,
 		overrideRequestBody,
 		overrideRequestHeaders,
-		interceptedRequest,
 		urlRewrite,
-		handlers,
-		onProxyFail,
-		onFileReadFail
+		handlers
 	});
 
+	let responseFromOnError;
+	if (error || !response) {
+		responseFromOnError = await handleOnError({ request, error, onError });
+		if (responseFromOnError) return;
+		if (!request.isRequestHandled) request.next();
+		return;
+	}
+
 	await handleResponse({
-		interceptedRequest,
-		response,
-		responseRaw,
+		request,
+		response: responseFromOnError || response,
+		responseFromProxyRequest,
 		onResponse,
 		overrideResponseHeaders,
 		overrideResponseBody,
 		overrideResponseOptions,
 		ignoreOnResponse,
-		fallbackOnResponse,
+		nextOnResponse,
 		abortOnResponse
 	});
 };
@@ -108,7 +121,7 @@ export class Interceptor {
 			await handleInterception(interceptedRequest, config);
 		}
 
-		// INFO: Fallback if not handled
+		// INFO: no interception occurs if request is not handled
 		if (!interceptedRequest.isInterceptResolutionHandled()) {
 			await interceptedRequest.continue();
 		}

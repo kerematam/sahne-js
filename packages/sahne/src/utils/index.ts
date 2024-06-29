@@ -1,10 +1,11 @@
 import urlMatches from './urlMatches';
 import fs from 'fs';
 import fetch from 'node-fetch';
-import cliColors from './cliColors';
 import { Buffer } from 'buffer';
+import Request from '../Request';
+
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
-import type { CommonConfig, ConfigForFile, Match, ProxyConfig } from '../types';
+import type { CommonConfig, ConfigForFile, Match, ProxyConfig, TransferObject } from '../types';
 import type { RequestInit, Response } from 'node-fetch';
 import type { HandleProxyUrl } from './types';
 
@@ -137,26 +138,24 @@ const handleAction = async <T = object>({
 };
 
 export const handleOverrideRequest = ({
+	request,
 	overrideRequestOptions,
 	overrideRequestBody,
 	overrideRequestHeaders,
-	interceptedRequest,
 	proxyUrl
 }: {
 	overrideRequestOptions?: ProxyConfig['overrideRequestOptions'];
 	overrideRequestBody?: ProxyConfig['overrideRequestBody'];
 	overrideRequestHeaders?: ProxyConfig['overrideRequestHeaders'];
-	interceptedRequest: HTTPRequest;
+	request: InstanceType<typeof Request>;
 	proxyUrl: string;
 }): RequestInit => {
 	const param = {
-		method: interceptedRequest.method(),
-		headers: interceptedRequest.headers() as Record<string, string>,
-		body: interceptedRequest.postData()
+		method: request.method(),
+		headers: request.headers() as Record<string, string>,
+		body: request.postData()
 	};
-
-	const additionalParams = { request: interceptedRequest, proxyUrl };
-
+	const additionalParams = { request: request.transferObject(), proxyUrl };
 	const requestOptions = overrideParam(overrideRequestOptions, param, additionalParams);
 	const headers = overrideParam(overrideRequestHeaders, param.headers, additionalParams);
 	const body = overrideParam(overrideRequestBody, param.body, additionalParams, true);
@@ -166,20 +165,24 @@ export const handleOverrideRequest = ({
 
 export const handleOverrideResponse = async ({
 	response,
-	responseRaw,
+	responseFromProxyRequest,
 	overrideResponseHeaders,
 	overrideResponseBody,
 	overrideResponseOptions,
-	interceptedRequest
+	request
 }: {
 	response: ResponseForRequest;
-	responseRaw?: Response;
+	responseFromProxyRequest?: Response;
 	overrideResponseHeaders?: CommonConfig['overrideResponseHeaders'];
 	overrideResponseBody?: CommonConfig['overrideResponseBody'];
 	overrideResponseOptions?: CommonConfig['overrideResponseOptions'];
-	interceptedRequest: HTTPRequest;
+	request: InstanceType<typeof Request>;
 }): Promise<ResponseForRequest> => {
-	const additionalParams = { response, responseRaw, request: interceptedRequest };
+	const additionalParams = {
+		response,
+		responseFromProxyRequest,
+		request: request.transferObject()
+	};
 	const responseOptions = overrideParam(
 		overrideResponseOptions,
 		response as ResponseForRequest,
@@ -201,77 +204,74 @@ export const handleOverrideResponse = async ({
  * @returns {Promise<boolean>} true if request handled
  */
 export const handleResponse = async ({
-	interceptedRequest,
+	request,
 	response,
-	responseRaw,
+	responseFromProxyRequest,
 	onResponse,
 	overrideResponseHeaders,
 	overrideResponseBody,
 	overrideResponseOptions,
 	ignoreOnResponse,
-	fallbackOnResponse,
+	nextOnResponse,
 	abortOnResponse
 }: {
-	interceptedRequest: HTTPRequest;
+	request: InstanceType<typeof Request>;
 	response: ResponseForRequest;
-	responseRaw?: Response;
+	responseFromProxyRequest?: Response;
 	onResponse: CommonConfig['onResponse'];
 	overrideResponseHeaders?: CommonConfig['overrideResponseHeaders'];
 	overrideResponseBody?: CommonConfig['overrideResponseBody'];
 	overrideResponseOptions?: CommonConfig['overrideResponseOptions'];
 	ignoreOnResponse?: CommonConfig['ignoreOnResponse'];
-	fallbackOnResponse?: CommonConfig['fallbackOnResponse'];
+	nextOnResponse?: CommonConfig['nextOnResponse'];
 	abortOnResponse?: CommonConfig['abortOnResponse'];
 }): Promise<boolean | undefined> => {
 	const respondOptions = await handleOverrideResponse({
 		response,
-		responseRaw,
+		responseFromProxyRequest,
 		overrideResponseHeaders,
 		overrideResponseBody,
 		overrideResponseOptions,
-		interceptedRequest
+		request
 	});
 	const params = {
-		request: interceptedRequest,
+		request: request.transferObject(),
 		response,
-		responseRaw,
-		url: new URL(interceptedRequest.url())
+		responseFromProxyRequest,
+		url: new URL(request.url())
 	};
+
 	await handleAction({
 		name: 'ignoreOnResponse',
 		conditionFn: ignoreOnResponse,
 		params,
-		action: () => interceptedRequest.continue()
+		action: request.ignore
 	});
-	if (isRequestHandled(interceptedRequest)) return true;
+	if (request.isRequestHandled()) return true;
 
 	await handleAction({
 		name: 'abortOnResponse',
 		conditionFn: abortOnResponse,
 		params,
-		action: () => interceptedRequest.abort()
+		action: request.abort
 	});
-	if (isRequestHandled(interceptedRequest)) return true;
+	if (request.isRequestHandled()) return true;
 
-	let isFallbackCalled = false;
 	await handleAction({
-		name: 'fallbackOnResponse',
-		conditionFn: fallbackOnResponse,
+		name: 'nextOnResponse',
+		conditionFn: nextOnResponse,
 		params,
-		action: () => {
-			isFallbackCalled = true;
-		}
+		action: request.next
 	});
-	if (isFallbackCalled || isRequestHandled(interceptedRequest)) return true;
+	if (request.isRequestHandled()) return true;
 	const isHandledOnResponse = await handleOnResponse({
 		onResponse,
-		interceptedRequest,
-		responseRaw,
+		request,
+		responseFromProxyRequest,
 		response
 	});
 	if (isHandledOnResponse) return true;
-	await interceptedRequest.respond(respondOptions);
-
+	await request.respond(respondOptions);
 	return false;
 };
 
@@ -279,26 +279,28 @@ export const handleMatch = ({
 	baseUrl,
 	url,
 	match,
-	interceptedRequest
+	request
 }: {
 	baseUrl: string;
 	url: string;
 	match?: Match | Match[];
-	interceptedRequest: HTTPRequest;
-}): boolean | undefined => {
+	request: InstanceType<typeof Request>;
+}): undefined | Match => {
 	if (match === undefined) return undefined;
 
 	const matches = Array.isArray(match) ? match : [match];
-	const matchChecker = (match: Match) =>
-		urlMatches({
+	const matchChecker = (match: Match) => {
+		const isMatched = urlMatches({
 			parsedUrl: new URL(url),
 			baseUrl,
 			urlString: url,
 			match,
-			request: interceptedRequest
+			request: request.transferObject()
 		});
+		if (isMatched) return match;
+	};
 
-	return matches.some(matchChecker);
+	return matches.find(matchChecker);
 };
 
 /**
@@ -307,75 +309,72 @@ export const handleMatch = ({
  * @returns {Promise<boolean>} true if request handled
  */
 export const handleRequestConfig = async ({
+	request,
 	match,
 	ignore,
 	abort,
-	fallback,
-	onRequest,
-	interceptedRequest
+	next,
+	onRequest
 }: {
+	request: InstanceType<typeof Request>;
 	match?: Match | Match[];
 	ignore?: Match | Match[];
 	abort?: Match | Match[];
-	fallback?: Match | Match[];
+	next?: Match | Match[];
 	onRequest?: CommonConfig['onRequest'];
-	interceptedRequest: HTTPRequest;
 }): Promise<boolean | undefined> => {
-	const url = interceptedRequest.url();
+	const url = request.url();
 	const parsedUrl = new URL(url);
 	const baseUrl = parsedUrl.origin;
 
-	const isMatched = handleMatch({ baseUrl, url, match, interceptedRequest }) ?? true;
-	if (!isMatched) return true;
-
-	const isIgnored = handleMatch({ baseUrl, url, match: ignore, interceptedRequest }) ?? false;
-	if (isIgnored) {
-		await interceptedRequest.continue();
+	const ignoreRule = handleMatch({ baseUrl, url, match: ignore, request });
+	if (ignoreRule !== undefined) {
+		request.setStatus({ ignore: ignoreRule });
+		await request.ignore();
 		return true;
 	}
 
-	const isAborted = handleMatch({ baseUrl, url, match: abort, interceptedRequest }) ?? false;
-	if (isAborted) {
-		await interceptedRequest.abort();
+	const abortRule = handleMatch({ baseUrl, url, match: abort, request });
+	if (abortRule !== undefined) {
+		request.setStatus({ abort: abortRule });
+		await request.abort();
 		return true;
 	}
 
-	const isFallback = handleMatch({ baseUrl, url, match: fallback, interceptedRequest }) ?? false;
-	if (isFallback) return true;
+	const nextRule = handleMatch({ baseUrl, url, match: next, request });
+	if (nextRule !== undefined) {
+		request.setStatus({ next: nextRule });
+		await request.next();
+		return true;
+	}
 
-	await handleOnRequest({ onRequest, interceptedRequest });
-	if (isRequestHandled(interceptedRequest)) return true;
+	const matchRule = handleMatch({ baseUrl, url, match, request });
+	if (matchRule === undefined) return true;
+	request.setStatus({ match: matchRule });
+
+	await handleOnRequest({ onRequest, request });
+	if (request.isRequestHandled()) return true;
 
 	return false;
 };
 
 export const handleOnRequest = async ({
 	onRequest,
-	interceptedRequest
+	request
 }: {
 	onRequest?: CommonConfig['onRequest'];
-	interceptedRequest: HTTPRequest;
+	request: InstanceType<typeof Request>;
 }): Promise<boolean | undefined> => {
 	if (onRequest === undefined) return;
 
-	let isFallbackCalled = false;
-
 	if (typeof onRequest === 'function') {
 		await onRequest({
-			request: interceptedRequest,
-			action: {
-				abort: () => interceptedRequest.abort(),
-				continue: () => interceptedRequest.continue(),
-				respond: (params) => interceptedRequest.respond(params),
-				fallback: () => {
-					isFallbackCalled = true;
-				}
-			},
-			url: new URL(interceptedRequest.url())
+			action: request.getActionMethods(),
+			url: new URL(request.url()),
+			request: request.transferObject()
 		});
 
-		const isHandled = await interceptedRequest.isInterceptResolutionHandled();
-		return isHandled || isFallbackCalled;
+		return request.isRequestHandled();
 	}
 
 	throw new Error(`onRequest is not a function. It is ${typeof onRequest}.`);
@@ -384,17 +383,17 @@ export const handleOnRequest = async ({
 export const handlePathRewrite = ({
 	pathRewrite,
 	proxyUrl,
-	interceptedRequest
+	request
 }: {
 	pathRewrite: ProxyConfig['pathRewrite'];
 	proxyUrl: string;
-	interceptedRequest: HTTPRequest;
+	request: InstanceType<typeof Request>;
 }): string => {
 	if (pathRewrite === undefined) return proxyUrl;
 
 	if (typeof pathRewrite === 'function') {
 		const urlInstance = new URL(proxyUrl);
-		urlInstance.pathname = pathRewrite(urlInstance.pathname, interceptedRequest);
+		urlInstance.pathname = pathRewrite(urlInstance.pathname, request.transferObject());
 
 		return urlInstance.toString();
 	}
@@ -405,25 +404,25 @@ export const handlePathRewrite = ({
 export const handleUrlRewrite = ({
 	urlRewrite,
 	proxyUrl,
-	interceptedRequest
+	request
 }: {
 	urlRewrite: ProxyConfig['urlRewrite'];
 	proxyUrl: string;
-	interceptedRequest: HTTPRequest;
+	request: InstanceType<typeof Request>;
 }): string => {
 	if (urlRewrite === undefined) return proxyUrl;
 
-	if (typeof urlRewrite === 'function') return urlRewrite(proxyUrl, interceptedRequest);
+	if (typeof urlRewrite === 'function') return urlRewrite(proxyUrl, request.transferObject());
 
 	throw new Error(`urlRewrite is not a function. It is ${typeof urlRewrite}.`);
 };
 
-export const getResponse = async (responseRaw: Response) => {
+export const getResponse = async (responseFromProxyRequest: Response) => {
 	const response = {
-		status: responseRaw.status,
-		headers: responseRaw.headers.raw(),
-		body: Buffer.from(await responseRaw.arrayBuffer()),
-		contentType: responseRaw.headers.get('content-type') || ''
+		status: responseFromProxyRequest.status,
+		headers: responseFromProxyRequest.headers.raw(),
+		body: Buffer.from(await responseFromProxyRequest.arrayBuffer()),
+		contentType: responseFromProxyRequest.headers.get('content-type') || ''
 	};
 
 	return response;
@@ -431,36 +430,27 @@ export const getResponse = async (responseRaw: Response) => {
 
 export const handleOnResponse = async ({
 	onResponse,
-	responseRaw,
+	responseFromProxyRequest,
 	response,
-	interceptedRequest
+	request
 }: {
 	onResponse?: CommonConfig['onResponse'];
-	responseRaw?: Response;
+	responseFromProxyRequest?: Response;
 	response: ResponseForRequest;
-	interceptedRequest: HTTPRequest;
+	request: InstanceType<typeof Request>;
 }): Promise<boolean | undefined> => {
 	if (onResponse === undefined) return;
-
-	let isFallbackCalled = false;
 
 	if (typeof onResponse === 'function') {
 		await onResponse({
 			response,
-			responseRaw,
-			request: interceptedRequest,
-			action: {
-				abort: () => interceptedRequest.abort(),
-				continue: () => interceptedRequest.continue(),
-				respond: (params) => interceptedRequest.respond(params),
-				fallback: () => {
-					isFallbackCalled = true;
-				}
-			},
-			url: new URL(interceptedRequest.url())
+			responseFromProxyRequest,
+			request: request.transferObject(),
+			action: request.getActionMethods(),
+			url: new URL(request.url())
 		});
 
-		return isRequestHandled(interceptedRequest) || isFallbackCalled;
+		return request.isRequestHandled();
 	}
 
 	throw new Error(`onResponse is not a function. It is ${typeof onResponse}.`);
@@ -468,14 +458,14 @@ export const handleOnResponse = async ({
 
 export const handleFilePath = ({
 	file,
-	interceptedRequest
+	request
 }: {
 	file: ConfigForFile['file'];
-	interceptedRequest: HTTPRequest;
+	request: InstanceType<typeof Request>;
 }): string => {
 	if (typeof file === 'string') return file;
-	const url = interceptedRequest.url();
-	if (typeof file === 'function') return file(url, interceptedRequest);
+	const url = request.url();
+	if (typeof file === 'function') return file(url, request.transferObject());
 
 	throw new Error(`file is not a string or a function. It is ${typeof file}.`);
 };
@@ -485,102 +475,81 @@ export const handleProxyUrl = ({
 	handleProxyUrl,
 	pathRewrite,
 	urlRewrite,
-	interceptedRequest
+	request
 }: {
 	requestUrl: string;
 	handleProxyUrl: HandleProxyUrl;
 	pathRewrite: ProxyConfig['pathRewrite'];
 	urlRewrite: ProxyConfig['urlRewrite'];
-	interceptedRequest: HTTPRequest;
+	request: InstanceType<typeof Request>;
 }): string => {
-	let proxyUrl = handleProxyUrl(requestUrl, interceptedRequest);
-	proxyUrl = handleUrlRewrite({ urlRewrite, proxyUrl, interceptedRequest });
-	proxyUrl = handlePathRewrite({ pathRewrite, proxyUrl, interceptedRequest });
+	let proxyUrl = handleProxyUrl(requestUrl, request.transferObject());
+	proxyUrl = handleUrlRewrite({ urlRewrite, proxyUrl, request });
+	proxyUrl = handlePathRewrite({ pathRewrite, proxyUrl, request });
 
 	return proxyUrl;
 };
 
 const handleProxyRequest = async ({
+	request,
 	pathRewrite,
 	overrideRequestOptions,
 	overrideRequestBody,
 	overrideRequestHeaders,
-	interceptedRequest,
 	urlRewrite,
 	handlers,
-	onProxyFail
+	onError
 }: {
+	request: InstanceType<typeof Request>;
 	pathRewrite: ProxyConfig['pathRewrite'];
 	overrideRequestOptions: ProxyConfig['overrideRequestOptions'];
 	overrideRequestBody: ProxyConfig['overrideRequestBody'];
 	overrideRequestHeaders: ProxyConfig['overrideRequestHeaders'];
-	interceptedRequest: HTTPRequest;
 	urlRewrite: ProxyConfig['urlRewrite'];
 	handlers: { handleProxyUrl: HandleProxyUrl };
-	onProxyFail?: ProxyConfig['onProxyFail'];
-}): Promise<{ response: ResponseForRequest; responseRaw?: Response }> => {
+	onError?: CommonConfig['onError'];
+}): Promise<{
+	response?: ResponseForRequest;
+	responseFromProxyRequest?: Response;
+	error?: unknown;
+}> => {
 	const proxyUrl = handleProxyUrl({
-		requestUrl: interceptedRequest.url(),
+		requestUrl: request.url(),
 		handleProxyUrl: handlers.handleProxyUrl,
 		pathRewrite,
 		urlRewrite,
-		interceptedRequest
+		request
 	});
 	const requestOptions = handleOverrideRequest({
 		overrideRequestOptions,
 		overrideRequestBody,
 		overrideRequestHeaders,
-		interceptedRequest,
+		request,
 		proxyUrl
 	});
 
 	try {
-		const responseRaw = await fetch(proxyUrl, requestOptions);
-		const response = await getResponse(responseRaw);
+		request.setStatus({ proxyUrl, requestOptions });
+		const responseFromProxyRequest = await fetch(proxyUrl, requestOptions);
+		const response = await getResponse(responseFromProxyRequest);
 
-		return { response, responseRaw };
+		return { response, responseFromProxyRequest };
 	} catch (error) {
-		onProxyFail?.(error, interceptedRequest);
-		console.error(
-			cliColors.bg.red,
-			'Error:',
-			cliColors.reset,
-			`Failed to make proxy request to:`,
-			cliColors.fg.cyan,
-			proxyUrl,
-			cliColors.reset,
-			`while intercepting request:`,
-			cliColors.fg.cyan,
-			interceptedRequest.url(),
-			cliColors.reset
-		);
-		console.log(`\nPlease ensure that:`);
-		console.log(`  - proxy server is running at ${proxyUrl}.`);
-		console.log(`  - proxy rule is valid for ${interceptedRequest.url()}.`);
-		console.log('\n');
+		request.log.fileReadError(error);
 
-		return {
-			response: {
-				body: `Failed during proxy request to ${interceptedRequest.url()}.`,
-				status: 500,
-				headers: {},
-				contentType: ''
-			},
-			responseRaw: undefined
-		};
+		return { error };
 	}
 };
 
 export const handleFileRequest = async ({
 	file,
-	interceptedRequest,
-	onFileReadFail
+	request
 }: {
 	file: ConfigForFile['file'];
-	interceptedRequest: HTTPRequest;
-	onFileReadFail?: ConfigForFile['onFileReadFail'];
-}): Promise<{ response: ResponseForRequest }> => {
-	const path = handleFilePath({ file, interceptedRequest });
+	request: InstanceType<typeof Request>;
+}): Promise<{ response?: ResponseForRequest; error?: unknown }> => {
+	const path = handleFilePath({ file, request });
+	request.setStatus({ filePath: path });
 	try {
 		const body = await fs.readFileSync(path);
 		// TODO: add better content type detection
@@ -589,62 +558,74 @@ export const handleFileRequest = async ({
 
 		return { response };
 	} catch (error) {
-		onFileReadFail?.(error, interceptedRequest);
-		const errorMessage = `Error during reading file ${path}.`;
-		console.error(cliColors.bg.red, errorMessage, cliColors.reset);
+		request.log.fileReadError(error);
 
-		// TODO: add better error handling
-		const response = {
-			body: `Error: Could not read file ${file}, ${error}`,
-			status: 500,
-			headers: {},
-			contentType: ''
-		};
-
-		return { response };
+		return { error };
 	}
 };
 
+export const handleOnError = async ({
+	request,
+	error,
+	onError
+}: {
+	request: InstanceType<typeof Request>;
+	error: unknown;
+	onError?: CommonConfig['onError'];
+}) => {
+	if (onError === undefined) return;
+
+	if (typeof onError === 'function') {
+		const response = await onError(error, {
+			request: request.transferObject(),
+			action: request.getActionMethods(),
+			url: new URL(request.url())
+		});
+
+		return response;
+	}
+
+	throw new Error(`onError is not a function. It is ${typeof onError}.`);
+};
+
 export const handleRequest = async ({
+	request,
 	file,
 	pathRewrite,
 	overrideRequestOptions,
 	overrideRequestBody,
 	overrideRequestHeaders,
-	interceptedRequest,
 	urlRewrite,
-	handlers,
-	onProxyFail,
-	onFileReadFail
+	handlers
 }: {
+	request: InstanceType<typeof Request>;
 	file?: ConfigForFile['file'];
 	pathRewrite: ProxyConfig['pathRewrite'];
 	overrideRequestOptions: ProxyConfig['overrideRequestOptions'];
 	overrideRequestBody: ProxyConfig['overrideRequestBody'];
 	overrideRequestHeaders: ProxyConfig['overrideRequestHeaders'];
-	interceptedRequest: HTTPRequest;
 	urlRewrite: ProxyConfig['urlRewrite'];
 	handlers: { handleProxyUrl: HandleProxyUrl };
-	onProxyFail?: ProxyConfig['onProxyFail'];
-	onFileReadFail?: ConfigForFile['onFileReadFail'];
-}): // TODO: make conditional type definition according to the file parameter
-Promise<{ response: ResponseForRequest; responseRaw?: Response }> => {
+}): Promise<{
+	response?: ResponseForRequest;
+	responseFromProxyRequest?: Response;
+	error?: unknown;
+}> => {
 	if (file) {
-		const { response } = await handleFileRequest({ file, interceptedRequest, onFileReadFail });
+		const { response, error } = await handleFileRequest({ file, request });
 
-		return { response };
+		return { response, error };
 	} else {
-		const { response, responseRaw } = await handleProxyRequest({
+		const { response, responseFromProxyRequest, error } = await handleProxyRequest({
+			request,
 			pathRewrite,
 			overrideRequestOptions,
 			overrideRequestBody,
 			overrideRequestHeaders,
-			interceptedRequest,
 			urlRewrite,
-			handlers,
-			onProxyFail
+			handlers
 		});
 
-		return { response, responseRaw };
+		return { response, responseFromProxyRequest, error };
 	}
 };
