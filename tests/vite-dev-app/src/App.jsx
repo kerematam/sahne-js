@@ -2,8 +2,9 @@ import { useState } from 'react';
 import reactLogo from './assets/react.svg';
 import viteLogo from '/vite.svg';
 import './App.css';
-import Todos from './Todos/Todos';
 import useRequestToFallbackEndpoint from './hooks/useRequestToFallbackEndpoint';
+import EndpointChecker from './EndpointChecker/EndpointChecker';
+import requests from './request';
 
 function App() {
 	const [count, setCount] = useState(0);
@@ -20,7 +21,9 @@ function App() {
 				</a>
 			</div>
 			<h1>Vite + React</h1>
-			<h2 className="sahne-title">This is update from SahneJS</h2>
+			{import.meta.env.MODE === 'development' && (
+				<h2 className="sahne-title">This is update from SahneJS</h2>
+			)}
 			<div className="card">
 				<button onClick={() => setCount((count) => count + 1)}>count is {count}</button>
 				<p>
@@ -28,8 +31,8 @@ function App() {
 				</p>
 			</div>
 			<p className="read-the-docs">Click on the Vite and React logos to learn more</p>
-			<Todos />
 			<div id="response-from-fallback-endpoint">{responseFromFallbackEndpoint}</div>
+			<EndpointChecker requests={requests} />
 		</>
 	);
 }

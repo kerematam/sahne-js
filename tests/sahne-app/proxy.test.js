@@ -2,57 +2,47 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import puppeteer from 'puppeteer';
 import { Interceptor } from 'sahne-js';
+import sahneConfig from './sahne.config.api';
 
-const target = 'http://localhost:8080';
-const devTarget = 'http://localhost:5173';
-
-const configs = [
-	{
-		match: `${target}/**`,
-		proxy: devTarget,
-		ignore: `${target}/api/**`,
-		next: `${target}/fallback/**`
-	},
-	{
-		match: `${target}/fallback/**`,
-		file: './fallback.json'
-	}
-];
+const interceptorConfig = sahneConfig.interceptor || {};
 
 /**
- * TODO:
- *  -> check if proxy file read works
- *  -> check if cookie override works
- *  -> check if header override works
- *  -> check if body override works
- *  -> check if fallback works
+ * - define interception rule in tests/sahne-app/sahne.config.api.js
+ * - define server implementation in tests/vite-dev-app/server/
+ * - define the way to make request and expected results in
+ *   tests/vite-dev-app/src/request.js
  */
+const requests = {
+	'/api/todos': '/api/todos',
+	'/api/read/me/from/a/file': '/api/read/me/from/a/file',
+	'/api/require-x-sahne-header': '/api/require-x-sahne-header',
+	'/redirect-to-another-api': '/redirect-to-another-api'
+};
 
 describe('Sahne Proxy', () => {
 	let browser;
 	let page;
 
-	// Before each test, launch the browser and create a new page
 	beforeAll(async () => {
 		browser = await puppeteer.launch({
-			// TODO: remove those
-			defaultViewport: null,
-			headless: false
+			headless: true
 		});
-		page = await browser.newPage();
+		page = await browser.pages().then((pages) => pages[0]);
 		await page.setRequestInterception(true);
-		const interceptor = new Interceptor(configs);
+		const interceptor = new Interceptor(interceptorConfig);
 		page.on('request', (interceptedRequest) => {
 			interceptor.handleRequest(interceptedRequest);
 		});
 
 		await page.goto('http://localhost:8080');
-		await page.waitForResponse(
-			(response) => response.url().includes('/api/todos') && response.status() === 200
-		);
+
+		await page.waitForRequest((request) => {
+			const paths = Object.values(requests);
+			const requestPath = new URL(request.url()).pathname;
+			return paths.includes(requestPath);
+		});
 	});
 
-	// After each test, close the browser
 	afterAll(async () => {
 		await browser.close();
 	});
@@ -63,7 +53,30 @@ describe('Sahne Proxy', () => {
 	});
 
 	it('should NOT intercept api request', async () => {
-		const todoCount = await page.$$eval('#todo-item', (items) => items.length);
-		expect(todoCount).toBe(10);
+		const api = requests['/api/todos'];
+		const selector = '#' + api.replace(/\//g, '\\/');
+		const content = await page.$eval(selector, (el) => el.textContent.trim());
+		expect(content).toBe('Success');
+	});
+
+	it('should read from a file', async () => {
+		const api = requests['/api/read/me/from/a/file'];
+		const selector = '#' + api.replace(/\//g, '\\/');
+		const content = await page.$eval(selector, (el) => el.textContent.trim());
+		expect(content).toBe('Success');
+	});
+
+	it('should override request headers and cookie', async () => {
+		const api = requests['/api/require-x-sahne-header'];
+		const selector = '#' + api.replace(/\//g, '\\/');
+		const content = await page.$eval(selector, (el) => el.textContent.trim());
+		expect(content).toBe('Success');
+	});
+
+	it('should handle redirect API', async () => {
+		const api = requests['/redirect-to-another-api'];
+		const selector = '#' + api.replace(/\//g, '\\/');
+		const content = await page.$eval(selector, (el) => el.textContent.trim());
+		expect(content).toBe('Success');
 	});
 });
