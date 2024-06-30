@@ -1,6 +1,6 @@
 {
 	"name": "sahne-js",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "SahneJs is a CLI tool designed for mocking, testing, and debugging by intercepting and manipulating requests. It leverages Puppeteer's interceptor to capture and manipulate specific requests. You can direct these requests to an internal development server or read them from a local file.",
 	"repository": {
 		"type": "git",
