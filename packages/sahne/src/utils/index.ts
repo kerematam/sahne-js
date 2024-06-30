@@ -535,7 +535,7 @@ const handleProxyRequest = async ({
 
 		return { response, responseFromProxyRequest };
 	} catch (error) {
-		request.log.fileReadError(error);
+		request.log.proxyRequestError(error);
 
 		return { error };
 	}
