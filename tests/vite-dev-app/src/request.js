@@ -18,7 +18,7 @@ const requests = [
 		id: '/api/read/me/from/a/file',
 		request: async () => {
 			try {
-				const res = await fetch('/api/read/me/from/a/file');
+				const res = await fetch('/api/read/me/from/a/file?test=123');
 				const { data } = await res.json();
 
 				if (data === 'Hello from a file endpoint') return true;

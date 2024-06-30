@@ -1,6 +1,6 @@
 {
 	"name": "sahne-js",
-	"version": "1.0.1-rc.3",
+	"version": "1.0.1-rc.6",
 	"description": "SahneJs is a tool that can be used for mocking, testing, and debugging by intercepting and manipulating certain requests. It uses Puppeteer's interceptor to redirect specific requests for manipulation. You can direct these requests to an internal development server from any URL, or read them from a local file you specify.",
 	"repository": {
 		"type": "git",
@@ -27,11 +27,13 @@
 	"types": "dist/index.d.ts",
 	"devDependencies": {
 		"@rollup/plugin-commonjs": "^25.0.7",
+		"@rollup/plugin-json": "^6.1.0",
 		"@rollup/plugin-node-resolve": "^15.2.3",
 		"@rollup/plugin-typescript": "^11.1.6",
 		"@types/node": "^20.12.7",
 		"rollup": "^4.17.2",
 		"rollup-plugin-node-builtins": "^2.1.2",
+		"rollup-plugin-peer-deps-external": "^2.2.4",
 		"ts-node": "^10.9.2",
 		"tslib": "^2.6.2",
 		"typescript": "^5.4.5"
@@ -43,10 +45,8 @@
 		"puppeteer": "^22.7.1"
 	},
 	"dependencies": {
-		"@rollup/plugin-json": "^6.1.0",
 		"@web/config-loader": "^0.3.1",
 		"commander": "^12.0.0",
-		"node-fetch": "^3.3.2",
-		"rollup-plugin-peer-deps-external": "^2.2.4"
+		"node-fetch": "^3.3.2"
 	}
 }

@@ -323,8 +323,9 @@ export const handleRequestConfig = async ({
 	next?: Match | Match[];
 	onRequest?: CommonConfig['onRequest'];
 }): Promise<boolean | undefined> => {
-	const url = request.url();
-	const parsedUrl = new URL(url);
+	const rawUrl = request.url();
+	const parsedUrl = new URL(rawUrl);
+	const url = `${parsedUrl.origin}${parsedUrl.pathname}`;
 	const baseUrl = parsedUrl.origin;
 
 	const ignoreRule = handleMatch({ baseUrl, url, match: ignore, request });
@@ -535,7 +536,7 @@ const handleProxyRequest = async ({
 
 		return { response, responseFromProxyRequest };
 	} catch (error) {
-		request.log.fileReadError(error);
+		request.log.proxyRequestError(error);
 
 		return { error };
 	}
