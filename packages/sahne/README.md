@@ -1,6 +1,12 @@
+
 # SahneJS
 
-SahneJs is a CLI tool that can be used for mocking, testing, and debugging by intercepting and manipulating desired requests. It uses Puppeteer's interceptor to catch specific requests for manipulation. You can direct these requests to an internal development server from any URL, or read them from a local file you specify.
+SahneJs is a CLI tool designed for mocking, testing, and debugging by intercepting and manipulating requests. It leverages Puppeteer's interceptor to capture and manipulate specific requests. You can direct these requests to an internal development server or read them from a local file.
+
+## Use Cases
+- Run your local single-page application on a production domain
+- Debug issues in production
+- Verify your solution without deployment
 
 https://github.com/kerematam/sahne-js/assets/5495509/1f6dd509-6feb-4730-9603-6e6ee6161a5b
 
@@ -9,13 +15,13 @@ https://github.com/kerematam/sahne-js/assets/5495509/1f6dd509-6feb-4730-9603-6e6
 To install `SahneJS`, run the following command:
 
 ```sh
-# Puppeteer is peer dependency
+# Puppeteer is a peer dependency
 npm install --save-dev puppeteer sahne-js
 ```
 
 ## Quick Start (Mock an Endpoint)
 
-Create a `sahne.config.js`:
+Create a `sahne.config.js` file:
 
 ```js
 import { defineConfig } from 'sahne-js';
@@ -26,45 +32,42 @@ export default defineConfig({
   interceptor: [
     {
       // Define matching rule for interception. 
-      // You may also pass a function or define multiple rule with an array
+      // You may also pass a function or define multiple rules with an array.
+      // It supports regex and glob patterns as well.
       match: '/api/path-to-my-endpoint',
-      // Only match our origin
+      // Only matches with our origin.
       ignore: ({ host }) => host !== 'my-target-domain.com',
-      // Read the response body from mock.json
+      // Read the response body from mock.json.
       file: './mock.json'
     }
   ]
 });
 ```
 
-For CommonJs:
+For CommonJS:
 
 ```js
 const { defineConfig } = require('sahne-js');
 
 module.exports = defineConfig({
-  // Initial URL to visit on load
   initialUrl: 'http://my-target-domain.com',
   interceptor: [
     {
-      // Define matching rule for interception. 
-      // You may also pass a function or define multiple rule with an array
       match: '/api/path-to-my-endpoint',
-      // Only match our origin
       ignore: ({ host }) => host !== 'my-target-domain.com',
-      // Read the response body from mock.json
       file: './mock.json'
     }
   ]
 });
 ```
-You may trigger the tool with below command:
+
+Run the tool with the following command:
 
 ```sh
 npx sahne
 ```
 
-You may add to the scripts in `package.json` to run with `npm run sahne`:
+Add it to the scripts in `package.json` to run with `npm run sahne`:
 
 ```patch
 "scripts": {
@@ -72,22 +75,21 @@ You may add to the scripts in `package.json` to run with `npm run sahne`:
   "build": "vite build",
   "preview": "vite preview",
 + "sahne": "sahne",
-  "test": " vitest"
-},
+  "test": "vitest"
+}
 ```
 
-## Use it with React Vite App (SPA)
+## Use with a React Vite App (SPA)
 
-Replace the production bundle with local development one.
+Replace the production bundle with a local development one.
 
-Create a `sahne.config.js`:
+Create a `sahne.config.js` file:
 
 ```js
-// sahne.config.js, lets you easy access to types
+// use defineConfig() for easy access to types
 import { defineConfig } from 'sahne-js';
 
 export default defineConfig({
-  // Initial URL to visit on load
   initialUrl: 'https://your-prod-site.com/home-page',
   interceptor: [
     {
@@ -99,15 +101,15 @@ export default defineConfig({
 });
 ```
 
-You may trigger the tool with below command. Ensure that proxy server is running:
+Run the tool with the following command. Ensure the proxy server is running:
 
 ```sh
-# Initilize the tool:
-# Caveat(!): Your dev server (proxyURL) should be running
+# Initialize the tool:
+# Note: Your dev server (proxyURL) should be running
 npx sahne
 ```
 
-To be able to use with HMR in Vite, you need to expose HMR socket seperately to escape target domain:
+To use it with HMR in Vite, you need to expose the HMR socket separately to escape the target domain:
 
 ```js
 // vite.config.js: https://vitejs.dev/config/
@@ -138,11 +140,11 @@ export default defineConfig({
       ignore: ({ host }) => host !== 'my-target-domain.com',
       proxy: 'http://localhost:5173',
 
-      // override request
+      // Override request
       overrideRequestBody: (body) => body,
-      overrideRequestHeaders: (headers) => ({ ...headers, 'x-sahne': 'true', cookie: 'sahne=true' })
+      overrideRequestHeaders: (headers) => ({ ...headers, 'x-sahne': 'true', cookie: 'sahne=true' }),
 
-      // override response
+      // Override response
       overrideResponseBody: (body) => body,
       overrideResponseHeaders: (headers) => headers
     }
@@ -162,13 +164,13 @@ export default defineConfig({
   initialUrl: target,
   interceptor: [
     {
-      // matched request are ignored and WON'T be forwarded to next rules.
+      // Matched requests are ignored and WON'T be forwarded to the next rules.
       ignore: ({ origin }) => origin !== target
     },
     {
       match: () => true,
       proxy: devTarget,
-      // matched requests are immadiately forwarded to next rules to be handled
+      // Matched requests are immediately forwarded to the next rules to be handled.
       next: `/api/**`,
       ignore: `/redirect-to-another-api`
     },
@@ -186,7 +188,7 @@ export default defineConfig({
 
 ## Set Puppeteer Options
 
-You may pass desired configs to launch and also access to browser and page with callback hooks:
+You may pass desired configs to launch and also access the browser and page with callback hooks:
 
 ```js
 export default defineConfig({
@@ -198,16 +200,16 @@ export default defineConfig({
   },
   callback: {
     beforeLaunch: async (browser, page) => {
-      // do stuff with browser or page
+      // Perform actions with browser or page
     },
     afterLaunch: async (browser, page) => {
-      // do stuff with browser or page
+      // Perform actions with browser or page
     },
     beforeGoto: async (browser, page) => {
-      // do stuff with browser or page
+      // Perform actions with browser or page
     },
     afterGoto: async (browser, page) => {
-      // do stuff with browser or page
+      // Perform actions with browser or page
     }
   }
 });
@@ -215,7 +217,7 @@ export default defineConfig({
 
 ## Using Without CLI
 
-You may import `Interceptor` directly and use it inside your existing Puppeteer code.
+You may import `Interceptor` directly and use it within your existing Puppeteer code.
 
 ```js
 import puppeteer from 'puppeteer';
@@ -248,6 +250,6 @@ const config = [
 ```bash
 npx sahne --file sahne.config.my-site.js
 
-# alternatively
+# Alternatively
 npx sahne -f sahne.config.my-site.js
 ```
