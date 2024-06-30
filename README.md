@@ -74,3 +74,140 @@ export default defineConfig({
   }
 });
 ```
+
+## Read from a File
+
+```js
+import { defineConfig } from 'sahne-js';
+
+export default defineConfig({
+  // initial URL to visit on load
+  initialUrl: 'http://my-target-domain.com',
+  interceptor: [
+    {
+      match: '/api/path-to-my-endpoint',
+      // only match our origin
+      ignore: ({ host }) => host !== 'my-target-domain.com',
+      // read the response body from mock.json
+      file: './mock.json'
+    }
+  ]
+});
+```
+
+## Override Request and Response
+
+```js
+import { defineConfig } from 'sahne-js';
+
+export default defineConfig({
+  // initial URL to visit on load
+  initialUrl: 'http://my-target-domain.com',
+  interceptor: [
+    {
+      match: '/api/path-to-my-endpoint',
+      ignore: ({ host }) => host !== 'my-target-domain.com',
+      proxy: 'http://localhost:5173',
+
+      // override request
+      overrideRequestBody: (body) => body,
+      overrideRequestHeaders: (headers) => ({ ...headers, 'x-sahne': 'true', cookie: 'sahne=true' })
+
+      // override response
+      overrideResponseBody: (body) => body,
+      overrideResponseHeaders: (headers) => headers
+    }
+  ]
+});
+```
+
+## Multiple Rules
+
+```js
+import { defineConfig } from 'sahne-js';
+
+const target = 'http://localhost:8080';
+const devTarget = 'http://localhost:5173';
+
+export default defineConfig({
+  initialUrl: target,
+  interceptor: [
+    {
+      // matched request are ignored and WON'T be forwarded to next rules.
+      ignore: ({ origin }) => origin !== target
+    },
+    {
+      match: () => true,
+      proxy: devTarget,
+      // matched requests are immadiately forwarded to next rules to be handled
+      next: `/api/**`,
+      ignore: `/redirect-to-another-api`
+    },
+    {
+      match: `/api/read/me/from/a/file`,
+      file: './mock.json'
+    },
+    {
+      match: [`/api/require-x-sahne-header`, `/api/another-api`],
+      overrideRequestHeaders: (headers) => ({ ...headers, 'x-sahne': 'true', cookie: 'sahne=true' })
+    }
+  ]
+});
+```
+
+## Set Puppeteer Options
+
+```js
+export default defineConfig({
+  initialUrl: target,
+  puppeteerOptions: {
+    launch: {
+      args: ['--incognito']
+    }
+  },
+  callback: {
+    beforeLaunch: async (browser, page) => {
+      // do stuff with browser or page
+    },
+    afterLaunch: async (browser, page) => {
+      // do stuff with browser or page
+    },
+    beforeGoto: async (browser, page) => {
+      // do stuff with browser or page
+    },
+    afterGoto: async (browser, page) => {
+      // do stuff with browser or page
+    }
+  }
+});
+```
+
+## Using Without CLI
+
+```js
+import puppeteer from 'puppeteer';
+import { Interceptor } from 'sahne-js';
+
+const config = [
+    {
+      match: ({ href }) => href.startsWith('https://your-prod-site.com'),
+      proxy: 'http://localhost:5173',
+      ignore: 'https://your-prod-site.com/api/**'
+    }
+]
+
+(async()=>{
+  
+  const browser = await puppeteer.launch({ headless: false });
+  const page = await browser.pages().then((pages) => pages[0]);
+  await page.setRequestInterception(true);
+
+  const interceptor = new Interceptor(config);
+  page.on('request', (interceptedRequest) => {
+    interceptor.handleRequest(interceptedRequest);
+  });
+
+  await page.goto('https://your-prod-site.com');
+})()
+
+```
