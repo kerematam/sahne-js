@@ -1,6 +1,6 @@
 # SahneJS
 
-SahneJs is a tool that can be used for mocking, testing, and debugging by intercepting and manipulating certain requests. It uses Puppeteer's interceptor to redirect specific requests for manipulation. You can direct these requests to an internal development server from any URL, or read them from a local file you specify.
+SahneJs is a CLI tool that can be used for mocking, testing, and debugging by intercepting and manipulating desired requests. It uses Puppeteer's interceptor to catch specific requests for manipulation. You can direct these requests to an internal development server from any URL, or read them from a local file you specify.
 
 https://github.com/kerematam/sahne-js/assets/5495509/1f6dd509-6feb-4730-9603-6e6ee6161a5b
 
@@ -13,14 +13,76 @@ To install `SahneJS`, run the following command:
 npm install --save-dev puppeteer sahne-js
 ```
 
-A common scenario with SPA applications involves injecting development bundles into production bundles. Configurations should be provided through sahne.config.js, which is created in the root path of the project directory:
+## Quick Start (Mock an Endpoint)
+
+Create a `sahne.config.js`:
+
+```js
+import { defineConfig } from 'sahne-js';
+
+export default defineConfig({
+  // Initial URL to visit on load
+  initialUrl: 'http://my-target-domain.com',
+  interceptor: [
+    {
+      // Define matching rule for interception. 
+      // You may also pass a function or define multiple rule with an array
+      // It supports refex, and blob patterns as well.
+      match: '/api/path-to-my-endpoint',
+      // Only matches with our origin.
+      ignore: ({ host }) => host !== 'my-target-domain.com',
+      // Read the response body from mock.json.
+      file: './mock.json'
+    }
+  ]
+});
+```
+
+For CommonJs:
+
+```js
+const { defineConfig } = require('sahne-js');
+
+module.exports = defineConfig({
+  initialUrl: 'http://my-target-domain.com',
+  interceptor: [
+    {
+      match: '/api/path-to-my-endpoint',
+      ignore: ({ host }) => host !== 'my-target-domain.com',
+      file: './mock.json'
+    }
+  ]
+});
+```
+You may trigger the tool with below command:
+
+```sh
+npx sahne
+```
+
+You may add to the scripts in `package.json` to run with `npm run sahne`:
+
+```patch
+"scripts": {
+  "dev": "vite",
+  "build": "vite build",
+  "preview": "vite preview",
++ "sahne": "sahne",
+  "test": " vitest"
+},
+```
+
+## Use it with React Vite App (SPA)
+
+Replace the production bundle with local development one.
+
+Create a `sahne.config.js`:
 
 ```js
 // sahne.config.js, lets you easy access to types
 import { defineConfig } from 'sahne-js';
 
 export default defineConfig({
-  // initial URL to visit on load
   initialUrl: 'https://your-prod-site.com/home-page',
   interceptor: [
     {
@@ -32,25 +94,7 @@ export default defineConfig({
 });
 ```
 
-For CommonJS:
-
-```js
-const { defineConfig } = require('sahne-js');
-
-module.exports = defineConfig({
-  // initial URL to visit on load
-  initialUrl: 'https://your-prod-site.com/home-page',
-  interceptor: [
-    {
-      match: ({ href }) => href.startsWith('https://your-prod-site.com'),
-      proxy: 'http://localhost:5173', // dev server URL
-      ignore: 'https://your-prod-site.com/api/**'
-    }
-  ]
-});
-```
-
-You may trigger the tool with below command. Ensure that proxy server is running.
+You may trigger the tool with below command. Ensure that proxy server is running:
 
 ```sh
 # Initilize the tool:
@@ -75,33 +119,13 @@ export default defineConfig({
 });
 ```
 
-## Read from a File
-
-```js
-import { defineConfig } from 'sahne-js';
-
-export default defineConfig({
-  // initial URL to visit on load
-  initialUrl: 'http://my-target-domain.com',
-  interceptor: [
-    {
-      match: '/api/path-to-my-endpoint',
-      // only match our origin
-      ignore: ({ host }) => host !== 'my-target-domain.com',
-      // read the response body from mock.json
-      file: './mock.json'
-    }
-  ]
-});
-```
-
 ## Override Request and Response
 
 ```js
 import { defineConfig } from 'sahne-js';
 
 export default defineConfig({
-  // initial URL to visit on load
+  // Initial URL to visit on load
   initialUrl: 'http://my-target-domain.com',
   interceptor: [
     {
@@ -157,6 +181,8 @@ export default defineConfig({
 
 ## Set Puppeteer Options
 
+You may pass desired configs to launch and also access to browser and page with callback hooks:
+
 ```js
 export default defineConfig({
   initialUrl: target,
@@ -184,20 +210,21 @@ export default defineConfig({
 
 ## Using Without CLI
 
+You may import `Interceptor` directly and use it inside your existing Puppeteer code.
+
 ```js
 import puppeteer from 'puppeteer';
 import { Interceptor } from 'sahne-js';
 
 const config = [
-    {
-      match: ({ href }) => href.startsWith('https://your-prod-site.com'),
-      proxy: 'http://localhost:5173',
-      ignore: 'https://your-prod-site.com/api/**'
-    }
-]
+  {
+    match: ({ href }) => href.startsWith('https://your-prod-site.com'),
+    proxy: 'http://localhost:5173',
+    ignore: 'https://your-prod-site.com/api/**'
+  }
+];
 
-(async()=>{
-  
+(async () => {
   const browser = await puppeteer.launch({ headless: false });
   const page = await browser.pages().then((pages) => pages[0]);
   await page.setRequestInterception(true);
@@ -208,6 +235,14 @@ const config = [
   });
 
   await page.goto('https://your-prod-site.com');
-})()
+})();
+```
 
+## Custom Config File
+
+```bash
+npx sahne --file sahne.config.my-site.js
+
+# alternatively
+npx sahne -f sahne.config.my-site.js
 ```
