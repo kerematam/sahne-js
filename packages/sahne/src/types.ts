@@ -307,7 +307,7 @@ export type CommonConfig = {
 			action: Action;
 			url: URL;
 		}
-	) => undefined | ResponseForRequest;
+	) => void | ResponseForRequest;
 };
 
 export type FileConfig = {

@@ -16,6 +16,7 @@
 		"interception"
 	],
 	"scripts": {
+		"prebuild": "rm -rf ./dist",
 		"build": "rollup -c",
 		"postbuild": "chmod +x ./dist/cli.*"
 	},
