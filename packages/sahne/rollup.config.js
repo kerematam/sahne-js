@@ -9,8 +9,14 @@ module.exports = [
 	{
 		// Configuration for the CLI
 		input: 'src/cli.ts', // Your CLI entry point
-		plugins: [builtins(), peerDepsExternal(), nodeResolve(), commonjs(), typescript(), json()],
-		external: ['fs', '@web/config-loader'],
+		plugins: [
+			peerDepsExternal(),
+			nodeResolve({ preferBuiltins: true }),
+			commonjs(),
+			typescript(),
+			json()
+		],
+		external: ['@web/config-loader'],
 		output: [
 			{
 				dir: './dist',
