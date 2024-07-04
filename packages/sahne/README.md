@@ -126,6 +126,16 @@ export default defineConfig({
 });
 ```
 
+## Use with Create React App
+
+Same steps with Vite except HMR socket configuration should be:
+
+```sh
+# in .env
+WDS_SOCKET_HOST=127.0.0.1
+```
+
+
 ## Override Request and Response
 
 ```js
