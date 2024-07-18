@@ -8,7 +8,7 @@ SahneJs is a CLI tool designed for mocking, testing, and debugging by intercepti
 - Debug issues in production
 - Verify your solution without deployment
 
-https://github.com/kerematam/sahne-js/assets/5495509/1f6dd509-6feb-4730-9603-6e6ee6161a5b
+https://github.com/user-attachments/assets/11c2f84b-3f4e-4f1e-8134-83ecd9fd2ca4
 
 ## Installation
 
