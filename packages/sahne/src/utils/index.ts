@@ -122,7 +122,13 @@ const handleAction = async <T = object>({
 	if (conditionFn === undefined) return;
 
 	if (typeof conditionFn === 'function') {
-		const result = await conditionFn(params);
+		let result;
+		try {
+			result = await conditionFn(params);
+		} catch (error) {
+			throw new Error(`Error while executing ${name}`, { cause: error });
+		}
+
 		if (typeof result !== 'boolean') {
 			throw new Error(
 				`${name} should return boolean. It has returned value with type ${typeof conditionFn}.`
@@ -325,7 +331,7 @@ export const handleRequestConfig = async ({
 }): Promise<boolean | undefined> => {
 	const rawUrl = request.url();
 	let parsedUrl = new URL(rawUrl);
-	parsedUrl.search = ''
+	parsedUrl.search = '';
 	const url = parsedUrl.toString();
 	const baseUrl = parsedUrl.origin;
 
