@@ -5,7 +5,7 @@ import { Buffer } from 'buffer';
 import Request from '../Request';
 
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
-import type { CommonConfig, ConfigForFile, Match, ProxyConfig, TransferObject } from '../types';
+import type { CommonConfig, ConfigForFile, Match, ProxyConfig } from '../types';
 import type { RequestInit, Response } from 'node-fetch';
 import type { HandleProxyUrl } from './types';
 
@@ -330,7 +330,7 @@ export const handleRequestConfig = async ({
 	onRequest?: CommonConfig['onRequest'];
 }): Promise<boolean | undefined> => {
 	const rawUrl = request.url();
-	let parsedUrl = new URL(rawUrl);
+	const parsedUrl = new URL(rawUrl);
 	parsedUrl.search = '';
 	const url = parsedUrl.toString();
 	const baseUrl = parsedUrl.origin;

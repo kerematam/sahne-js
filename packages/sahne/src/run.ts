@@ -1,4 +1,4 @@
-import puppeteer, { HTTPRequest, Puppeteer } from 'puppeteer';
+import puppeteer, { HTTPRequest } from 'puppeteer';
 import { InterceptorConfig, SahneConfig, ProcessedInterceptorConfig } from './types';
 import {
 	makeHandleProxy,
@@ -9,6 +9,7 @@ import {
 } from './utils';
 import { setDefaultResultOrder } from 'node:dns';
 import Request from './Request';
+import type { Page as PageType, HTTPRequest as HTTPRequestType } from 'puppeteer';
 
 // CAVEAT: This is fix for the following issue:
 // - https://github.com/node-fetch/node-fetch/issues/1624
@@ -145,18 +146,28 @@ export const run = async ({
 	});
 	await callback.afterLaunch?.(browser);
 
-	const [page] = await browser.pages();
-	await page.setViewport({ width: 0, height: 0 });
-	await page.setRequestInterception(true);
+	const interceptor = config !== undefined ? new Interceptor(config) : null;
+	const setupInterception = async (page: PageType) => {
+		await page.setViewport({ width: 0, height: 0 });
+		await page.setRequestInterception(true);
+		if (interceptor) {
+			page.on('request', (interceptedRequest: HTTPRequestType) => {
+				interceptor.handleRequest(interceptedRequest);
+			});
+		}
+	};
 
-	if (config !== undefined) {
-		const interceptor = new Interceptor(config);
-		page.on('request', (interceptedRequest) => {
-			interceptor.handleRequest(interceptedRequest);
-		});
-	}
+	browser.on('targetcreated', async (target) => {
+		const newPage = await target.page();
+		if (newPage) {
+			await setupInterception(newPage);
+		}
+	});
 
-	await callback.beforeGoto?.(browser, page);
-	await page.goto(initialUrl, puppeteerOptions.goto);
-	await callback.afterGoto?.(browser, page);
+	const [initialPage] = await browser.pages();
+	await setupInterception(initialPage);
+
+	await callback.beforeGoto?.(browser, initialPage);
+	await initialPage.goto(initialUrl, puppeteerOptions.goto);
+	await callback.afterGoto?.(browser, initialPage);
 };
