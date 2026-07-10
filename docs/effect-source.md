@@ -1,69 +1,74 @@
-# Effect Source Reference
+# Effect v4 Development Reference
 
-Status: Current reference.
-Last verified: July 10, 2026.
+Status: current.
 
-This repository keeps a local checkout of the Effect v4 source at
-`.repos/effect`. It is read-only research material for agents and developers.
-Application code must import Effect from declared package dependencies, never
-from the local checkout.
+## Version Contract
 
-## Source Repository
+- Effect version: `4.0.0-beta.97`
+- Source tag: `effect@4.0.0-beta.97`
+- Source commit: `f643dbb265093065dc0a61ca6133693dc2401678`
+- Source repository: `https://github.com/Effect-TS/effect-smol`
+- Local checkout: `.repos/effect`
 
-Use the Effect v4 beta source:
+The package dependency and source checkout must stay on the same exact beta.
+Effect v4 is still changing, so do not research against a floating `main`
+checkout after selecting a package version.
 
-```text
-https://github.com/Effect-TS/effect-smol
-```
+## Documentation Policy
 
-Do not use `https://github.com/Effect-TS/effect` for this migration. That
-repository is the Effect v3 line, while SahneJS is targeting Effect v4 beta.
+Do not copy Effect guides or install an Effect-specific project skill. The
+pinned checkout already contains the version-matched documentation, source,
+examples, and tests needed to work with Effect.
 
-## Local Checkout Shape
+## Authority Order
 
-- Path: `.repos/effect`
-- Remote: `https://github.com/Effect-TS/effect-smol`
-- Branch: `main`
-- History: shallow clone with `--depth 1`
-- Usage: read-only reference for APIs, tests, examples, and patterns
+1. `LLMS.md` and `ai-docs/src/` for current guidance and examples
+2. `packages/*/src/` for exact public APIs and JSDoc
+3. Package tests and type tests for runtime and inference behavior
 
-The checkout is intentionally gitignored and must not be committed.
+Use `effect.website` only for conceptual background. Its public examples may
+target Effect v3 and must be checked against the pinned v4 source.
 
 ## Initial Checkout
 
-Run from the SahneJS repository root when `.repos/effect` is missing:
+Run from the SahneJS repository root:
 
 ```bash
 mkdir -p .repos
-git clone --depth 1 --single-branch --branch main https://github.com/Effect-TS/effect-smol .repos/effect
+git clone --depth 1 --single-branch --branch effect@4.0.0-beta.97 \
+  https://github.com/Effect-TS/effect-smol .repos/effect
 ```
 
-## Refresh Existing Checkout
+The checkout is gitignored and read-only.
 
-Run from the repository root to replace the local reference with the latest
-`main` revision while keeping the checkout shallow:
+## Pin an Existing Checkout
 
 ```bash
-git -C .repos/effect fetch --depth 1 origin main
-git -C .repos/effect checkout main
-git -C .repos/effect reset --hard origin/main
-git -C .repos/effect clean -fd
-git -C .repos/effect gc --prune=now
+git -C .repos/effect fetch --depth 1 origin tag effect@4.0.0-beta.97
+git -C .repos/effect checkout --detach effect@4.0.0-beta.97
 ```
 
-These commands discard local edits inside `.repos/effect`. That is expected
-because the checkout is reference material, not application code.
+Do not edit or import from `.repos/effect`.
 
-## Verify
+## Install the Matching Package
 
 ```bash
+npm install effect@4.0.0-beta.97 --workspace sahne-js
+```
+
+Add other `@effect/*` packages only when required, using the same exact version.
+
+## Verify Alignment
+
+```bash
+node -p 'require("./packages/sahne/package.json").dependencies.effect'
+node -p 'require("./.repos/effect/packages/effect/package.json").version'
+git -C .repos/effect tag --points-at HEAD --list effect@4.0.0-beta.97
 git -C .repos/effect rev-parse --is-shallow-repository
-git -C .repos/effect remote -v
-sed -n '1,24p' .repos/effect/packages/effect/package.json
 ```
 
-Expected signals:
+Expected version signals are `4.0.0-beta.97` and
+`effect@4.0.0-beta.97`; the checkout must report `true` for shallow history.
 
-- `rev-parse --is-shallow-repository` prints `true`.
-- `origin` points to `https://github.com/Effect-TS/effect-smol`.
-- `.repos/effect/packages/effect/package.json` has a `4.0.0-beta.*` version.
+When upgrading, change the package dependency, source tag, and this document in
+the same change.
