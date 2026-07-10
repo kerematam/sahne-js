@@ -1,13 +1,11 @@
-import urlMatches from './urlMatches';
-import fs from 'fs';
-import fetch from 'node-fetch';
-import { Buffer } from 'buffer';
-import Request from '../Request';
+import { Buffer } from 'node:buffer';
+import fs from 'node:fs';
+import Request from '../Request.js';
+import urlMatches from './urlMatches.js';
 
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
-import type { CommonConfig, ConfigForFile, Match, ProxyConfig } from '../types';
-import type { RequestInit, Response } from 'node-fetch';
-import type { HandleProxyUrl } from './types';
+import type { CommonConfig, ConfigForFile, Match, ProxyConfig } from '../types.js';
+import type { HandleProxyUrl } from './types.js';
 
 type ProxyType = ProxyConfig['proxy'];
 
@@ -70,6 +68,8 @@ interface Options {
 	[key: string]: any;
 }
 
+type OverrideFunction = (...args: never[]) => unknown;
+
 /**
  * A function to override or merge parameters based on the provided override.
  * The override can be a function, an object, or undefined.
@@ -86,7 +86,7 @@ interface Options {
  * @throws {Error} If the `override` is not a function or an object.
  */
 function overrideParam<T, U = Options>(
-	override: Function | object | undefined | null | string,
+	override: OverrideFunction | object | undefined | null | string,
 	param: T,
 	options: U,
 	isReplace: boolean = false
@@ -94,7 +94,7 @@ function overrideParam<T, U = Options>(
 	if (override === undefined) return param as T;
 
 	if (typeof override === 'function') {
-		return override(param as (param: T, options: U) => T, options as U) as T;
+		return (override as (param: T, options: U) => T)(param, options);
 	}
 
 	if (typeof override === 'object' && !isReplace) {
@@ -426,9 +426,15 @@ export const handleUrlRewrite = ({
 };
 
 export const getResponse = async (responseFromProxyRequest: Response) => {
+	const headers: Record<string, string | string[]> = Object.fromEntries(
+		responseFromProxyRequest.headers.entries()
+	);
+	const setCookieHeaders = responseFromProxyRequest.headers.getSetCookie();
+	if (setCookieHeaders.length > 0) headers['set-cookie'] = setCookieHeaders;
+
 	const response = {
 		status: responseFromProxyRequest.status,
-		headers: responseFromProxyRequest.headers.raw(),
+		headers,
 		body: Buffer.from(await responseFromProxyRequest.arrayBuffer()),
 		contentType: responseFromProxyRequest.headers.get('content-type') || ''
 	};
@@ -505,8 +511,7 @@ const handleProxyRequest = async ({
 	overrideRequestBody,
 	overrideRequestHeaders,
 	urlRewrite,
-	handlers,
-	onError
+	handlers
 }: {
 	request: InstanceType<typeof Request>;
 	pathRewrite: ProxyConfig['pathRewrite'];
@@ -515,7 +520,6 @@ const handleProxyRequest = async ({
 	overrideRequestHeaders: ProxyConfig['overrideRequestHeaders'];
 	urlRewrite: ProxyConfig['urlRewrite'];
 	handlers: { handleProxyUrl: HandleProxyUrl };
-	onError?: CommonConfig['onError'];
 }): Promise<{
 	response?: ResponseForRequest;
 	responseFromProxyRequest?: Response;

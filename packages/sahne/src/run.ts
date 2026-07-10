@@ -1,20 +1,14 @@
-import puppeteer, { HTTPRequest } from 'puppeteer';
-import { InterceptorConfig, SahneConfig, ProcessedInterceptorConfig } from './types';
+import puppeteer from 'puppeteer';
+import type { HTTPRequest, Page } from 'puppeteer';
+import type { InterceptorConfig, ProcessedInterceptorConfig, SahneConfig } from './types.js';
 import {
 	makeHandleProxy,
 	handleResponse,
 	handleRequestConfig,
 	handleRequest,
 	handleOnError
-} from './utils';
-import { setDefaultResultOrder } from 'node:dns';
-import Request from './Request';
-import type { Page as PageType, HTTPRequest as HTTPRequestType } from 'puppeteer';
-
-// CAVEAT: This is fix for the following issue:
-// - https://github.com/node-fetch/node-fetch/issues/1624
-// - https://stackoverflow.com/questions/72390154/econnrefused-when-making-a-request-to-localhost-using-fetch-in-node-js
-setDefaultResultOrder('ipv4first');
+} from './utils/index.js';
+import Request from './Request.js';
 
 export const handleInterception = async (
 	interceptedRequest: HTTPRequest,
@@ -106,7 +100,7 @@ export class Interceptor {
 		configs?: InterceptorConfig | InterceptorConfig[]
 	): ProcessedInterceptorConfig[] => {
 		if (configs === undefined) return [];
-		let allConfigs = Array.isArray(configs) ? configs : [configs];
+		const allConfigs = Array.isArray(configs) ? configs : [configs];
 
 		return allConfigs.map((config) => ({
 			...config,
@@ -147,11 +141,11 @@ export const run = async ({
 	await callback.afterLaunch?.(browser);
 
 	const interceptor = config !== undefined ? new Interceptor(config) : null;
-	const setupInterception = async (page: PageType) => {
+	const setupInterception = async (page: Page) => {
 		await page.setViewport({ width: 0, height: 0 });
 		await page.setRequestInterception(true);
 		if (interceptor) {
-			page.on('request', (interceptedRequest: HTTPRequestType) => {
+			page.on('request', (interceptedRequest: HTTPRequest) => {
 				interceptor.handleRequest(interceptedRequest);
 			});
 		}

@@ -1,15 +1,11 @@
-import type { RequestInit, Response } from 'node-fetch';
-import type {
-	Browser,
-	HTTPRequest,
-	Page,
-	PuppeteerLaunchOptions,
-	ResponseForRequest
-} from 'puppeteer';
+import type { Browser, HTTPRequest, Page, ResponseForRequest } from 'puppeteer';
 import type { GoToOptions } from 'puppeteer';
-import type { HandleProxyUrl } from './utils/types';
+import type { URL } from 'node:url';
+import type { HandleProxyUrl } from './utils/types.js';
 
-import type { URL } from 'url';
+type PuppeteerLaunchOptions = NonNullable<
+	Parameters<(typeof import('puppeteer'))['default']['launch']>[0]
+>;
 
 export type Match = string | RegExp | ((url: URL, request: HTTPRequest) => boolean);
 
@@ -277,20 +273,17 @@ export type CommonConfig = {
 	 * Overrirde response headers to be passed to Puppeteer's respond method
 	 */
 	overrideResponseHeaders?:
-		| Partial<ReturnType<OverrideResponseHeadersFunction>>
-		| OverrideResponseHeadersFunction;
+		Partial<ReturnType<OverrideResponseHeadersFunction>> | OverrideResponseHeadersFunction;
 	/**
 	 * Overrirde response headers to be passed to Puppeteer's respond method
 	 */
 	overrideResponseBody?:
-		| Partial<ReturnType<OverrideResponseBodyFunction>>
-		| OverrideResponseBodyFunction;
+		Partial<ReturnType<OverrideResponseBodyFunction>> | OverrideResponseBodyFunction;
 	/**
 	 * Overide response options of Puppeteer's respond method
 	 */
 	overrideResponseOptions?:
-		| Partial<ReturnType<OverrideResponseOptionsFunction>>
-		| OverrideResponseOptionsFunction;
+		Partial<ReturnType<OverrideResponseOptionsFunction>> | OverrideResponseOptionsFunction;
 	/**
 	 * The function to be called when the request handling fails.
 	 * @param {Error} error - The error object.
@@ -343,20 +336,17 @@ export type ProxyConfig = {
 	 * Overrirde request headers to be passed to fetch method of NodeFetch
 	 */
 	overrideRequestHeaders?:
-		| Partial<ReturnType<OverrideRequestHeadersFunction>>
-		| OverrideRequestHeadersFunction;
+		Partial<ReturnType<OverrideRequestHeadersFunction>> | OverrideRequestHeadersFunction;
 	/**
 	 * Overrirde request headers to be passed to fetch method of NodeFetch
 	 */
 	overrideRequestBody?:
-		| Partial<ReturnType<OverrideRequestBodyFunction>>
-		| OverrideRequestBodyFunction;
+		Partial<ReturnType<OverrideRequestBodyFunction>> | OverrideRequestBodyFunction;
 	/**
 	 * Overrirde request headers to be passed to Puppeteer's fetch method
 	 */
 	overrideRequestOptions?:
-		| Partial<ReturnType<OverrideRequesOptionsFunction>>
-		| OverrideRequesOptionsFunction;
+		Partial<ReturnType<OverrideRequesOptionsFunction>> | OverrideRequesOptionsFunction;
 };
 
 type AllPropsNever<T> = {

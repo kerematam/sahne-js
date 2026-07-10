@@ -1,21 +1,22 @@
 import { useState, useEffect } from 'react';
 import './EndpointChecker.css';
 
-/**
- * List of requests to check
- * id: unique identifier for the request
- * request: function that returns a promise that resolves to a boolean
- */
-const requests = [
+type EndpointResult = {
+	id: string;
+	error?: string;
+	result: boolean;
+};
+
+const requests: Array<{ id: string; request: () => Promise<boolean> }> = [
 	{
 		id: '/api/1.json',
 		request: async () => {
 			try {
 				const response = await fetch('/api/1.json');
-				const data = await response.json();
+				const data = (await response.json()) as unknown;
 
-				return data.length > 0;
-			} catch (e) {
+				return Array.isArray(data) && data.length > 0;
+			} catch {
 				return false;
 			}
 		}
@@ -23,15 +24,15 @@ const requests = [
 ];
 
 const EndpointChecker = () => {
-	const [results, setResults] = useState<{ id: string; error?: any; result: boolean }[]>([]);
+	const [results, setResults] = useState<EndpointResult[]>([]);
 
 	useEffect(() => {
 		const checkEndpoints = async () => {
 			const requestList = requests.map(({ request }) => request());
 
-			const results = await Promise.allSettled(requestList);
+			const settledRequests = await Promise.allSettled(requestList);
 			setResults(
-				results.map((result, index) => {
+				settledRequests.map((result, index) => {
 					if (result.status === 'fulfilled') {
 						return {
 							id: requests[index].id,
@@ -40,7 +41,7 @@ const EndpointChecker = () => {
 					} else {
 						return {
 							id: requests[index].id,
-							error: result.reason.message,
+							error: result.reason instanceof Error ? result.reason.message : String(result.reason),
 							result: false
 						};
 					}
@@ -48,8 +49,8 @@ const EndpointChecker = () => {
 			);
 		};
 
-		checkEndpoints();
-	}, [requests]);
+		void checkEndpoints();
+	}, []);
 
 	return (
 		<div>
@@ -62,8 +63,8 @@ const EndpointChecker = () => {
 					</tr>
 				</thead>
 				<tbody>
-					{results.map(({ id, result }, index) => (
-						<tr key={index}>
+					{results.map(({ id, result }) => (
+						<tr key={id}>
 							<td>{id}</td>
 							<td style={{ color: result ? 'green' : 'red' }} id={id}>
 								{result ? 'Success' : 'Fail'}

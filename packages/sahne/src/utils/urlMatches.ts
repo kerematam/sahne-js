@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import { HTTPRequest } from 'puppeteer';
-import type { Match } from '../types';
-import { globToRegex } from './glob';
+import type { HTTPRequest } from 'puppeteer';
+import type { Match } from '../types.js';
+import { globToRegex } from './glob.js';
 
 /**
  * INFO: The implementation is taken from Playwright repo as it is not exposed from npm package.
@@ -30,7 +30,7 @@ import { globToRegex } from './glob';
 export function constructURLBasedOnBaseURL(baseURL: string | undefined, givenURL: string): string {
 	try {
 		return new URL(givenURL, baseURL).toString();
-	} catch (e) {
+	} catch {
 		return givenURL;
 	}
 }

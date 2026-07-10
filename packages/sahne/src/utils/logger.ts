@@ -1,4 +1,4 @@
-import { Match } from '../types';
+import type { Match } from '../types.js';
 
 export const cliColors = {
 	reset: '\x1b[0m',
@@ -66,7 +66,6 @@ const info = (message: string) => {
 };
 
 export const logger = { error, info };
-
 
 export function handleError(error: unknown): void {
 	if (error instanceof Error) {

@@ -1,9 +1,9 @@
-
 # SahneJS
 
 SahneJs is a CLI tool designed for mocking, testing, and debugging by intercepting and manipulating requests. It leverages Puppeteer's interceptor to capture and manipulate specific requests. You can direct these requests to an internal development server or read them from a local file.
 
 ## Use Cases
+
 - Run your local single-page application on a production domain
 - Debug issues in production
 - Verify your solution without deployment
@@ -12,7 +12,7 @@ https://github.com/kerematam/sahne-js/assets/5495509/1f6dd509-6feb-4730-9603-6e6
 
 ## Installation
 
-To install `SahneJS`, run the following command:
+SahneJS v2 is ESM-only and requires Node.js 22.18 or newer. Install SahneJS and its Puppeteer peer dependency:
 
 ```sh
 # Puppeteer is a peer dependency
@@ -21,9 +21,9 @@ npm install --save-dev puppeteer sahne-js
 
 ## Quick Start (Mock an Endpoint)
 
-Create a `sahne.config.js` file:
+Create a `sahne.config.ts` file:
 
-```js
+```ts
 import { defineConfig } from 'sahne-js';
 
 export default defineConfig({
@@ -31,30 +31,13 @@ export default defineConfig({
   initialUrl: 'http://my-target-domain.com',
   interceptor: [
     {
-      // Define matching rule for interception. 
+      // Define matching rule for interception.
       // You may also pass a function or define multiple rules with an array.
       // It supports regex and glob patterns as well.
       match: '/api/path-to-my-endpoint',
       // Only matches with our origin.
       ignore: ({ host }) => host !== 'my-target-domain.com',
       // Read the response body from mock.json.
-      file: './mock.json'
-    }
-  ]
-});
-```
-
-For CommonJS:
-
-```js
-const { defineConfig } = require('sahne-js');
-
-module.exports = defineConfig({
-  initialUrl: 'http://my-target-domain.com',
-  interceptor: [
-    {
-      match: '/api/path-to-my-endpoint',
-      ignore: ({ host }) => host !== 'my-target-domain.com',
       file: './mock.json'
     }
   ]
@@ -83,9 +66,9 @@ Add it to the scripts in `package.json` to run with `npm run sahne`:
 
 Replace the production bundle with a local development one.
 
-Create a `sahne.config.js` file:
+Create a `sahne.config.ts` file:
 
-```js
+```ts
 // use defineConfig() for easy access to types
 import { defineConfig } from 'sahne-js';
 
@@ -111,8 +94,8 @@ npx sahne
 
 To use it with HMR in Vite, you need to expose the HMR socket separately to escape the target domain:
 
-```js
-// vite.config.js: https://vitejs.dev/config/
+```ts
+// vite.config.ts: https://vite.dev/config/
 export default defineConfig({
   // ...
   server: {
@@ -126,19 +109,9 @@ export default defineConfig({
 });
 ```
 
-## Use with Create React App
-
-Same steps with Vite except HMR socket configuration should be:
-
-```sh
-# in .env
-WDS_SOCKET_HOST=127.0.0.1
-```
-
-
 ## Override Request and Response
 
-```js
+```ts
 import { defineConfig } from 'sahne-js';
 
 export default defineConfig({
@@ -152,7 +125,11 @@ export default defineConfig({
 
       // Override request
       overrideRequestBody: (body) => body,
-      overrideRequestHeaders: (headers) => ({ ...headers, 'x-sahne': 'true', cookie: 'sahne=true' }),
+      overrideRequestHeaders: (headers) => ({
+        ...headers,
+        'x-sahne': 'true',
+        cookie: 'sahne=true'
+      }),
 
       // Override response
       overrideResponseBody: (body) => body,
@@ -164,7 +141,7 @@ export default defineConfig({
 
 ## Multiple Rules
 
-```js
+```ts
 import { defineConfig } from 'sahne-js';
 
 const target = 'http://localhost:8080';
@@ -200,7 +177,7 @@ export default defineConfig({
 
 You may pass desired configs to launch and also access the browser and page with callback hooks:
 
-```js
+```ts
 export default defineConfig({
   initialUrl: target,
   puppeteerOptions: {
@@ -229,7 +206,7 @@ export default defineConfig({
 
 You may import `Interceptor` directly and use it within your existing Puppeteer code.
 
-```js
+```ts
 import puppeteer from 'puppeteer';
 import { Interceptor } from 'sahne-js';
 
@@ -258,8 +235,8 @@ const config = [
 ## Custom Config File
 
 ```bash
-npx sahne --file sahne.config.my-site.js
+npx sahne --file sahne.config.my-site.ts
 
 # Alternatively
-npx sahne -f sahne.config.my-site.js
+npx sahne -f sahne.config.my-site.ts
 ```

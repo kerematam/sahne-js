@@ -2,17 +2,21 @@
 	"name": "sahne-app",
 	"version": "1.0.0",
 	"description": "",
-	"main": "index.js",
 	"type": "module",
 	"scripts": {
-		"test": " vitest",
+		"test": "vitest run",
 		"test:run": "vitest run",
-		"test:cli-features": "sahne"
+		"test:cli-features": "node ../../packages/sahne/dist/cli.js",
+		"typecheck": "tsc --noEmit"
 	},
 	"author": "",
 	"license": "ISC",
 	"dependencies": {
 		"sahne-js": "file:../../packages/sahne",
-		"vitest": "^1.6.0"
+		"vitest": "^4.1.10"
+	},
+	"devDependencies": {
+		"puppeteer": "^25.3.0",
+		"typescript": "^5.9.3"
 	}
 }

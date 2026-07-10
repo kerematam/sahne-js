@@ -1,3 +1,4 @@
-export { Interceptor } from './run';
+export { Interceptor } from './run.js';
 
-export { defineConfig } from './defineConfig';
+export { defineConfig } from './defineConfig.js';
+export type { InterceptorConfig, Match, SahneConfig } from './types.js';

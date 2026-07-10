@@ -1,7 +1,6 @@
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
-import { Match } from './types';
-import { handleError, logDecorator, logger } from './utils/logger';
-import { RequestInit } from 'node-fetch';
+import type { Match } from './types.js';
+import { handleError, logDecorator, logger } from './utils/logger.js';
 
 type Status = {
 	proxyUrl?: string;
