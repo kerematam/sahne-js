@@ -6,7 +6,6 @@ const target = 'http://localhost:8080';
 const devTarget = 'http://localhost:5173';
 
 const successColor = '\x1b[32m';
-const failColor = '\x1b[31m';
 const resetColor = '\x1b[0m';
 
 const checkIfProxyRequestWorks = async (_browser: Browser, page: Page) => {
@@ -28,14 +27,9 @@ export default defineConfig({
 	},
 	callback: {
 		afterGoto: async (browser, page) => {
-			try {
-				await checkIfProxyRequestWorks(browser, page);
-				console.log(successColor, '✓ ', resetColor, 'CLI command works!');
-				process.exit(0);
-			} catch (error) {
-				console.error(failColor, 'CLI Test failed', error);
-				process.exit(1);
-			}
+			await checkIfProxyRequestWorks(browser, page);
+			console.log(successColor, '✓ ', resetColor, 'CLI command works!');
+			await browser.close();
 		}
 	}
 });

@@ -1,6 +1,7 @@
+import { Effect } from 'effect';
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
-import type { Match } from './types.js';
-import { handleError, logDecorator, logger } from './utils/logger.js';
+import { RequestActionError } from './errors.js';
+import type { Action, Match } from './types.js';
 
 type Status = {
 	proxyUrl?: string;
@@ -12,127 +13,108 @@ type Status = {
 	requestOptions?: RequestInit;
 };
 
+const matchToString = (match: Match | undefined): string => {
+	if (match === undefined) return '';
+	return typeof match === 'string' ? match : match.toString();
+};
+
 class Request {
-	isNextCalled = false;
 	#interceptedRequest: HTTPRequest;
-
-	// TODO: add implementation
-	logLevel: 'info' | 'debug' | 'error' = 'info';
-
-	/**
-	 * states that are set through interception. They are used into logging
-	 */
+	isNextCalled = false;
 	status: Status = {};
-	/**
-	 * states that are set through interception. They are used into logging
-	 * @param {LoggerState} loggerState
-	 * @returns {void}
-	 */
-	setStatus = (status: Status) => {
+
+	constructor(interceptedRequest: HTTPRequest) {
+		this.#interceptedRequest = interceptedRequest;
+	}
+
+	setStatus = (status: Status): void => {
 		Object.assign(this.status, status);
 	};
 
-	constructor(interceptedRequest: HTTPRequest, logLevel: 'info' | 'debug' | 'error' = 'info') {
-		this.#interceptedRequest = interceptedRequest;
-		this.logLevel = logLevel;
-	}
+	abortEffect = Effect.suspend(() =>
+		Effect.tryPromise({
+			try: () => this.#interceptedRequest.abort(),
+			catch: (cause) =>
+				new RequestActionError({
+					action: 'abort',
+					requestUrl: this.url(),
+					cause,
+					message: `Failed to abort ${this.url()}`
+				})
+		})
+	);
 
-	abort = async () => {
-		try {
-			await this.#interceptedRequest.abort();
-		} catch (error) {
-			logger.error('Error while aborting request');
-			handleError(error);
-		}
-	};
-	ignore = async () => {
-		try {
-			await this.#interceptedRequest.continue();
-			const requestlUrl = logDecorator.url(this.url());
-			const matchRule = logDecorator.match(this.status.ignore);
-			const message = `request: ${requestlUrl} is NOT intercepted as it matches with ignore rule: ${matchRule}`;
-			logger.info(message);
-		} catch (error) {
-			await logger.error('Error while ignoring request');
-			await handleError(error);
-		}
-	};
-	respond = async (params: ResponseForRequest) => {
-		try {
-			await this.#interceptedRequest.respond(params);
-			const proxiedTo = logDecorator.url(this.status.proxyUrl || this.status.filePath);
-			const requestUrl = logDecorator.url(this.url());
+	continueEffect = Effect.suspend(() =>
+		Effect.tryPromise({
+			try: () => this.#interceptedRequest.continue(),
+			catch: (cause) =>
+				new RequestActionError({
+					action: 'continue',
+					requestUrl: this.url(),
+					cause,
+					message: `Failed to continue ${this.url()}`
+				})
+		})
+	);
 
-			if (this.status.filePath) {
-				logger.info(`request: ${requestUrl} ` + `is read from the file: ${proxiedTo}.`);
-			} else {
-				logger.info(`request: ${requestUrl} ` + `is proxied to ${proxiedTo}.`);
-			}
-		} catch (error) {
-			const proxiedTo = logDecorator.url(this.status.proxyUrl || this.status.filePath);
-			const requestUrl = logDecorator.url(this.url());
-			logger.error(`request: ${requestUrl} ` + `could NOT be proxied to ${proxiedTo}.`);
-			handleError(error);
-		}
-	};
-	next = () => {
+	ignoreEffect = this.continueEffect.pipe(
+		Effect.andThen(
+			Effect.suspend(() =>
+				Effect.logInfo(
+					`Request ${this.url()} was not intercepted because it matched ignore rule ${matchToString(this.status.ignore)}`
+				)
+			)
+		)
+	);
+
+	respondEffect = (params: ResponseForRequest) =>
+		Effect.tryPromise({
+			try: () => this.#interceptedRequest.respond(params),
+			catch: (cause) =>
+				new RequestActionError({
+					action: 'respond',
+					requestUrl: this.url(),
+					cause,
+					message: `Failed to respond to ${this.url()}`
+				})
+		}).pipe(
+			Effect.andThen(
+				Effect.logInfo(
+					this.status.filePath
+						? `Request ${this.url()} was read from ${this.status.filePath}`
+						: `Request ${this.url()} was proxied to ${this.status.proxyUrl ?? this.url()}`
+				)
+			)
+		);
+
+	nextEffect = Effect.sync(() => {
 		this.isNextCalled = true;
-		const nextRule = logDecorator.match(this.status.next);
-		const requestUrl = logDecorator.url(this.url());
-		const message = `request: ${requestUrl} is NOT intercepted as it matches with next rule: ${nextRule}`;
-		logger.info(message);
-	};
+	}).pipe(
+		Effect.andThen(
+			Effect.suspend(() =>
+				Effect.logInfo(
+					`Request ${this.url()} continued to the next rule after matching ${matchToString(this.status.next)}`
+				)
+			)
+		)
+	);
 
-	/**
-	 * @description - Returns all the action methods
-	 * @returns {Object} - Object containing all the action methods
-	 */
-	getActionMethods = () => {
-		return {
-			abort: this.abort,
-			ignore: this.ignore,
-			respond: this.respond,
-			next: this.next
-		};
-	};
+	getActionMethods = (): Action => ({
+		abort: () => Effect.runPromise(this.abortEffect),
+		ignore: () => Effect.runPromise(this.ignoreEffect),
+		respond: (params) => Effect.runPromise(this.respondEffect(params)),
+		next: () => Effect.runSync(this.nextEffect)
+	});
 
-	url = () => this.#interceptedRequest.url();
-	isRequestHandled = () =>
+	url = (): string => this.#interceptedRequest.url();
+	isRequestHandled = (): boolean =>
 		this.isNextCalled || this.#interceptedRequest.isInterceptResolutionHandled();
+	isResolutionHandled = (): boolean => this.#interceptedRequest.isInterceptResolutionHandled();
 
-	transferObject = () => this.#interceptedRequest;
-	method = () => this.#interceptedRequest.method();
-	headers = () => this.#interceptedRequest.headers();
-	postData = () => this.#interceptedRequest.postData();
-
-	log = {
-		proxyRequestError: (error: unknown) => {
-			const proxyUrl = logDecorator.url(this.status.proxyUrl);
-			const requestlUrl = logDecorator.url(this.url());
-			const message = `Failed to make proxy request to: ${proxyUrl} while intercepting request: ${requestlUrl}`;
-			const messages = [
-				message,
-				'\nEnsure that:',
-				`  - proxy server is running at ${proxyUrl}.`,
-				`  - proxy rule is valid for ${requestlUrl}.\n`
-			].join('\n');
-			logger.error(messages);
-			handleError(error);
-		},
-		fileReadError: (error: unknown) => {
-			const filePath = logDecorator.url(this.status.filePath);
-			const requestlUrl = logDecorator.url(this.url());
-			const message = `Failed to read file path from: ${filePath} while intercepting request: ${requestlUrl}`;
-			const messages = [
-				message,
-				'\nEnsure that:',
-				`  - file exist at ${filePath}.`,
-				`  - proxy rule is valid for ${requestlUrl}.\n`
-			].join('\n');
-			logger.error(messages);
-			handleError(error);
-		}
-	};
+	transferObject = (): HTTPRequest => this.#interceptedRequest;
+	method = (): string => this.#interceptedRequest.method();
+	headers = (): Record<string, string> => this.#interceptedRequest.headers();
+	postData = (): string | undefined => this.#interceptedRequest.postData();
 }
 
 export default Request;

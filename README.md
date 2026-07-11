@@ -19,6 +19,26 @@ SahneJS v2 is ESM-only and requires Node.js 22.18 or newer. Install SahneJS and 
 npm install --save-dev puppeteer sahne-js
 ```
 
+### Test a Local Tarball
+
+The publishable package is the `packages/sahne` workspace, not the repository
+root. Build and pack it from the repository root with:
+
+```sh
+npm run pack:sahne-js
+```
+
+This creates `sahne-js-2.0.0.tgz` in the repository root. Install that exact
+archive in the playground or another consumer:
+
+```sh
+cd playground/vite-8-react-ts-app
+npm install ../../sahne-js-2.0.0.tgz
+```
+
+Bare `npm pack` at the repository root is intentionally rejected because it
+would package the private monorepo rather than the `sahne-js` distribution.
+
 ## Quick Start (Mock an Endpoint)
 
 Create a `sahne.config.ts` file:
@@ -100,9 +120,9 @@ export default defineConfig({
   // ...
   server: {
     strictPort: true,
-    hmr: {
+    ws: {
       protocol: 'ws',
-      host: '127.0.0.1',
+      host: 'localhost',
       clientPort: 5173
     }
   }
@@ -240,3 +260,10 @@ npx sahne --file sahne.config.my-site.ts
 # Alternatively
 npx sahne -f sahne.config.my-site.ts
 ```
+
+## Process Lifecycle
+
+The CLI owns the Puppeteer browser it launches. Closing the browser, pressing
+Ctrl+C, or sending SIGTERM removes request listeners, interrupts in-flight
+handlers, and closes the browser before the process exits. Missing, invalid, or
+unloadable configuration files are reported on stderr and exit with status 1.

@@ -16,10 +16,13 @@
 		"interception"
 	],
 	"scripts": {
+		"prepack": "npm run build",
 		"prebuild": "rm -rf ./dist",
 		"build": "tsc -p tsconfig.json",
 		"postbuild": "chmod +x ./dist/cli.js",
-		"typecheck": "tsc --noEmit"
+		"test": "vitest run",
+		"test:unit": "vitest run",
+		"typecheck": "tsc --noEmit && tsc -p tsconfig.test.json"
 	},
 	"author": "Kerem Atam",
 	"license": "MIT",
@@ -39,9 +42,11 @@
 		"README.md"
 	],
 	"devDependencies": {
+		"@effect/vitest": "4.0.0-beta.97",
 		"@types/node": "^24.13.3",
 		"puppeteer": "^25.3.0",
-		"typescript": "^5.9.3"
+		"typescript": "^5.9.3",
+		"vitest": "^4.1.10"
 	},
 	"bin": {
 		"sahne": "./dist/cli.js"
@@ -50,7 +55,7 @@
 		"puppeteer": "^20.0.0 || ^21.0.0 || ^22.0.0 || ^23.0.0 || ^24.0.0 || ^25.0.0"
 	},
 	"dependencies": {
-		"commander": "^15.0.0",
+		"@effect/platform-node-shared": "4.0.0-beta.97",
 		"effect": "4.0.0-beta.97"
 	}
 }

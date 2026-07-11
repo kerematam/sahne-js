@@ -1,46 +1,71 @@
 #!/usr/bin/env node
 
-import { program } from 'commander';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { run } from './run.js';
-import type { SahneConfig } from './types.js';
+import * as NodeChildProcessSpawner from '@effect/platform-node-shared/NodeChildProcessSpawner';
+import * as NodeFileSystem from '@effect/platform-node-shared/NodeFileSystem';
+import * as NodePath from '@effect/platform-node-shared/NodePath';
+import * as NodeRuntime from '@effect/platform-node-shared/NodeRuntime';
+import * as NodeStdio from '@effect/platform-node-shared/NodeStdio';
+import * as NodeTerminal from '@effect/platform-node-shared/NodeTerminal';
+import { Cause, Console, Effect, Layer, Option } from 'effect';
+import { readFileSync } from 'node:fs';
+import { CliError, CliOutput, Command, Flag } from 'effect/unstable/cli';
+import { loadConfig } from './config.js';
+import { formatSahneError, isSahneError } from './errors.js';
+import { runEffect } from './run.js';
+import { ProxyTransport, PuppeteerLauncher } from './services.js';
 
-const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const packageJson = JSON.parse(
+	readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+) as { readonly version: string };
 
-async function loadConfig(customFile?: string): Promise<SahneConfig | undefined> {
-	try {
-		const configPath = resolve(customFile ?? 'sahne.config.ts');
+const configFile = Flag.string('file').pipe(
+	Flag.withAlias('f'),
+	Flag.withDescription('Config file to use'),
+	Flag.optional
+);
 
-		if (!existsSync(configPath)) {
-			throw new Error(
-				customFile
-					? `Could not find a config file at ${configPath}`
-					: 'Could not find a sahne.config file.'
-			);
-		}
+const command = Command.make('sahne', { file: configFile }, ({ file }) =>
+	Effect.gen(function* () {
+		const config = yield* loadConfig(Option.isSome(file) ? file.value : undefined);
+		yield* Effect.scoped(runEffect(config));
+	})
+);
 
-		const configModule = await import(pathToFileURL(configPath).href);
-		return (configModule.default ?? configModule) as SahneConfig;
-	} catch (error) {
-		console.error(error instanceof Error ? error.message : error);
-		return;
-	}
-}
+const nodeBaseServices = Layer.mergeAll(
+	NodeFileSystem.layer,
+	NodePath.layer,
+	NodeStdio.layer,
+	NodeTerminal.layer
+);
+const nodeCliServices = Layer.provideMerge(NodeChildProcessSpawner.layer, nodeBaseServices);
+const liveServices = Layer.mergeAll(nodeCliServices, ProxyTransport.layer, PuppeteerLauncher.layer);
 
-program
-	.name('sahne')
-	.version(pkg.version)
-	.option('-f, --file <file>', 'config file to use')
-	.action(async (commandConfigs) => {
-		const fileConfigs = await loadConfig(commandConfigs.file);
-		if (!fileConfigs) return;
-		const configs = { ...commandConfigs, ...fileConfigs };
-		await run(configs);
-	});
-
-program.parseAsync(process.argv).catch((error: unknown) => {
-	console.error(error instanceof Error ? error.message : error);
-	process.exitCode = 1;
+const defaultFormatter = CliOutput.defaultFormatter();
+const formatter = CliOutput.layer({
+	...defaultFormatter,
+	formatVersion: (_name, version) => version
 });
+
+const args = process.argv.slice(2).map((argument) => (argument === '-V' ? '--version' : argument));
+
+const program = Command.runWith(command, { version: packageJson.version })(args).pipe(
+	Effect.provide(formatter),
+	Effect.tapCause((cause) => {
+		if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+		const failure = Cause.findErrorOption(cause);
+		if (
+			Option.isSome(failure) &&
+			CliError.isCliError(failure.value) &&
+			failure.value._tag === 'ShowHelp'
+		) {
+			return Effect.void;
+		}
+		if (Option.isSome(failure) && isSahneError(failure.value)) {
+			return Console.error(formatSahneError(failure.value));
+		}
+		return Console.error(Cause.pretty(cause));
+	}),
+	Effect.provide(liveServices)
+);
+
+NodeRuntime.runMain(program, { disableErrorReporting: true });

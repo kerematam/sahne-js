@@ -100,9 +100,9 @@ export default defineConfig({
   // ...
   server: {
     strictPort: true,
-    hmr: {
+    ws: {
       protocol: 'ws',
-      host: '127.0.0.1',
+      host: 'localhost',
       clientPort: 5173
     }
   }
@@ -240,3 +240,10 @@ npx sahne --file sahne.config.my-site.ts
 # Alternatively
 npx sahne -f sahne.config.my-site.ts
 ```
+
+## Process Lifecycle
+
+The CLI owns the Puppeteer browser it launches. Closing the browser, pressing
+Ctrl+C, or sending SIGTERM removes request listeners, interrupts in-flight
+handlers, and closes the browser before the process exits. Missing, invalid, or
+unloadable configuration files are reported on stderr and exit with status 1.

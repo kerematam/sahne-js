@@ -7,6 +7,8 @@ type PuppeteerLaunchOptions = NonNullable<
 	Parameters<(typeof import('puppeteer'))['default']['launch']>[0]
 >;
 
+export type MaybePromise<A> = A | PromiseLike<A>;
+
 export type Match = string | RegExp | ((url: URL, request: HTTPRequest) => boolean);
 
 export declare interface SahneConfig {
@@ -36,10 +38,10 @@ export declare interface SahneConfig {
 	 * Callbacks to be called before and after the launch and goto methods of Puppeteer.
 	 */
 	callback?: {
-		beforeLaunch?: () => void;
-		afterLaunch?: (browser: Browser) => void;
-		beforeGoto?: (browser: Browser, page: Page) => void;
-		afterGoto?: (browser: Browser, page: Page) => void;
+		beforeLaunch?: () => MaybePromise<void>;
+		afterLaunch?: (browser: Browser) => MaybePromise<void>;
+		beforeGoto?: (browser: Browser, page: Page) => MaybePromise<void>;
+		afterGoto?: (browser: Browser, page: Page) => MaybePromise<void>;
 	};
 }
 
@@ -95,7 +97,7 @@ export type OverrideRequestAdditionalParams = {
 export type ResponseFromProxyRequest = Response;
 
 export type OverrideResponseAdditionalParams = {
-	responseFromProxyRequest: ResponseFromProxyRequest;
+	responseFromProxyRequest?: ResponseFromProxyRequest;
 	response: ResponseForRequest;
 	request: HTTPRequest;
 };
@@ -123,9 +125,9 @@ export type OverrideResponseOptionsFunction = (
 ) => ResponseForRequest;
 
 export type Action = {
-	abort: () => void;
-	respond: (params: ResponseForRequest) => void;
-	ignore: () => void;
+	abort: () => Promise<void>;
+	respond: (params: ResponseForRequest) => Promise<void>;
+	ignore: () => Promise<void>;
 	next: () => void;
 };
 
@@ -217,7 +219,7 @@ export type CommonConfig = {
 	 * @param {URL} params.url - The URL object of the intercepted request.
 	 * @returns {void} - Returns void.
 	 */
-	onRequest?: (param: OnRequestParams) => void;
+	onRequest?: (param: OnRequestParams) => MaybePromise<void>;
 	/**
 	 * Intercepted request ignored (not intercepted) if the function returns true.
 	 * It will not be handled by any other following rules unlike next.
@@ -238,7 +240,7 @@ export type CommonConfig = {
 	 * @param {OnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {void} - Returns void.
 	 */
-	onResponse?: (params: OnResponseParams) => void;
+	onResponse?: (params: OnResponseParams) => MaybePromise<void>;
 	/**
 	 * Intercepted request ignored (not intercepted) if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
@@ -248,7 +250,7 @@ export type CommonConfig = {
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
 	 */
-	ignoreOnResponse?: (params: ActionOnResponseParams) => boolean;
+	ignoreOnResponse?: (params: ActionOnResponseParams) => MaybePromise<boolean>;
 	/**
 	 * Intercepted response aborted if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
@@ -258,7 +260,7 @@ export type CommonConfig = {
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
 	 */
-	abortOnResponse?: (params: ActionOnResponseParams) => boolean;
+	abortOnResponse?: (params: ActionOnResponseParams) => MaybePromise<boolean>;
 	/**
 	 * Intercepted response nexts to next interception rule if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
@@ -268,7 +270,7 @@ export type CommonConfig = {
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
 	 */
-	nextOnResponse?: (params: ActionOnResponseParams) => boolean;
+	nextOnResponse?: (params: ActionOnResponseParams) => MaybePromise<boolean>;
 	/**
 	 * Overrirde response headers to be passed to Puppeteer's respond method
 	 */
@@ -300,7 +302,7 @@ export type CommonConfig = {
 			action: Action;
 			url: URL;
 		}
-	) => void | ResponseForRequest;
+	) => MaybePromise<void | ResponseForRequest>;
 };
 
 export type FileConfig = {

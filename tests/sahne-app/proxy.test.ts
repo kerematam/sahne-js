@@ -16,6 +16,7 @@ const requests = {
 describe('Sahne Proxy', () => {
 	let browser: Browser | undefined;
 	let page: Page;
+	const interceptionErrors: unknown[] = [];
 
 	beforeAll(async () => {
 		browser = await puppeteer.launch({ headless: true });
@@ -24,14 +25,19 @@ describe('Sahne Proxy', () => {
 
 		const interceptor = new Interceptor(interceptorConfig);
 		page.on('request', (interceptedRequest) => {
-			void interceptor.handleRequest(interceptedRequest);
+			void interceptor.handleRequest(interceptedRequest).catch((error: unknown) => {
+				interceptionErrors.push(error);
+			});
 		});
 
 		await page.goto('http://localhost:8080');
-		await page.waitForRequest((request) => {
-			const requestPath = new URL(request.url()).pathname;
-			return Object.values(requests).includes(requestPath);
-		});
+		await page.waitForFunction(
+			(paths) =>
+				paths.every((path) => document.getElementById(path)?.textContent?.trim() === 'Success'),
+			{},
+			Object.values(requests)
+		);
+		if (interceptionErrors.length > 0) throw interceptionErrors[0];
 	});
 
 	afterAll(async () => {

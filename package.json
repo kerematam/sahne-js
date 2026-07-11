@@ -1,6 +1,7 @@
 {
-	"name": "sahne-js",
+	"name": "sahne-js-monorepo",
 	"version": "0.0.0",
+	"private": true,
 	"description": "A tool designed for testing and debugging that uses Puppeteer's interceptor to proxy the desired requests to an internal development server from any specified URL.",
 	"directories": {
 		"doc": "docs"
@@ -13,11 +14,18 @@
 		"typescript-eslint": "^8.63.0"
 	},
 	"scripts": {
+		"prepack": "node scripts/prevent-root-pack.mjs",
+		"pack:sahne-js": "npm pack --workspace packages/sahne",
 		"lint": "prettier --check packages/sahne && eslint packages/sahne/src",
 		"build": "npm run build --workspaces",
 		"build:sahne-js": "npm run build --workspace sahne-js",
 		"format": "prettier --write ./packages/sahne/**/*",
-		"test": "echo \"Error: no test specified\" && exit 1"
+		"test": "npm run test:unit",
+		"test:unit": "npm run test:unit --workspace sahne-js",
+		"test:integration": "npm test --prefix tests",
+		"test:pack": "node scripts/pack-smoke.mjs",
+		"typecheck": "npm run typecheck --workspace sahne-js && npm run build:sahne-js && npm run typecheck --prefix tests",
+		"verify": "npm run lint && npm run typecheck && npm run test:unit && npm run test:integration && npm run build --prefix playground/vite-8-react-ts-app && npm run test:pack"
 	},
 	"workspaces": [
 		"packages/sahne"

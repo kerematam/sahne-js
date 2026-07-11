@@ -5,7 +5,7 @@
 - `packages/sahne/src/` — maintained library and CLI implementation
 - `packages/sahne/package.json` — published dependency and runtime contract
 - `tests/sahne-app/` — browser integration fixture and interceptor API tests
-- `playground/vite-react-ts-app/` — maintained Vite playground
+- `playground/vite-8-react-ts-app/` — maintained Vite 8 playground
 
 ## Effect v4
 
