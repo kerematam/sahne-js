@@ -1,53 +1,54 @@
-import urlMatches from './urlMatches';
-import fs from 'fs';
-import fetch from 'node-fetch';
-import { Buffer } from 'buffer';
-import Request from '../Request';
-
+import { Buffer } from 'node:buffer';
+import { Effect, FileSystem } from 'effect';
 import type { HTTPRequest, ResponseForRequest } from 'puppeteer';
-import type { CommonConfig, ConfigForFile, Match, ProxyConfig } from '../types';
-import type { RequestInit, Response } from 'node-fetch';
-import type { HandleProxyUrl } from './types';
+import Request from '../Request.js';
+import { FileReadError, HookError, ProxyResponseError, type InterceptionError } from '../errors.js';
+import { ProxyTransport } from '../services.js';
+import type {
+	ActionOnResponseParams,
+	CommonConfig,
+	ConfigForFile,
+	Match,
+	MaybePromise,
+	OnResponseParams,
+	ProcessedInterceptorConfig,
+	ProxyConfig
+} from '../types.js';
+import type { HandleProxyUrl } from './types.js';
+import urlMatches from './urlMatches.js';
 
 type ProxyType = ProxyConfig['proxy'];
+
+export type RuleOutcome =
+	{ readonly _tag: 'Resolved' } | { readonly _tag: 'NextRule' } | { readonly _tag: 'Unmatched' };
+
+type RequestConfigOutcome = RuleOutcome | { readonly _tag: 'Matched' };
+
+type SourceResponse = {
+	readonly response: ResponseForRequest;
+	readonly responseFromProxyRequest?: Response;
+};
+
+const resolved: RuleOutcome = { _tag: 'Resolved' };
+const nextRule: RuleOutcome = { _tag: 'NextRule' };
+const unmatched: RuleOutcome = { _tag: 'Unmatched' };
+const matched: RequestConfigOutcome = { _tag: 'Matched' };
 
 export const isRequestHandled = (interceptedRequest: HTTPRequest): boolean =>
 	interceptedRequest.isInterceptResolutionHandled();
 
-/**
- * Creates a handle proxy function that modifies the request URL based on the provided proxy configuration.
- *
- * @param {Object} options - The options for creating the handle proxy function.
- * @param {undefined|string|Function} options.proxy - The proxy URL or a function that modifies the request URL.
- * @param {import("puppeteer").HTTPRequest} options.interceptedRequest - The intercepted request object.
- * @returns {HandleProxyUrl} The handle proxy function.
- */
 export const makeHandleProxy = ({ proxy }: { proxy: ProxyType }): HandleProxyUrl => {
 	if (proxy === undefined) return (requestUrl) => requestUrl;
+	if (typeof proxy === 'function') return proxy;
 
-	if (typeof proxy === 'function') {
-		const handleProxyUrl = (requestUrl: string, interceptedRequest: HTTPRequest) =>
-			proxy(requestUrl, interceptedRequest);
-
-		return handleProxyUrl;
-	}
-	const proxyUrlParsed = new URL(proxy);
-	const proxyUrlSearch = new URLSearchParams(proxyUrlParsed.search);
-
-	const handleProxyUrl = (requestUrl: string) => {
+	return (requestUrl) => {
+		const proxyUrlParsed = new URL(proxy);
+		const proxyUrlSearch = new URLSearchParams(proxyUrlParsed.search);
 		const requestUrlParsed = new URL(requestUrl);
 
-		if (requestUrlParsed.protocol !== proxyUrlParsed.protocol) {
-			requestUrlParsed.protocol = proxyUrlParsed.protocol;
-		}
-
-		if (requestUrlParsed.hostname !== proxyUrlParsed.hostname) {
-			requestUrlParsed.hostname = proxyUrlParsed.hostname;
-		}
-
-		if (requestUrlParsed.port !== proxyUrlParsed.port) {
-			requestUrlParsed.port = proxyUrlParsed.port;
-		}
+		requestUrlParsed.protocol = proxyUrlParsed.protocol;
+		requestUrlParsed.hostname = proxyUrlParsed.hostname;
+		requestUrlParsed.port = proxyUrlParsed.port;
 
 		if (proxyUrlParsed.pathname !== '/') {
 			requestUrlParsed.pathname = proxyUrlParsed.pathname + requestUrlParsed.pathname;
@@ -61,86 +62,84 @@ export const makeHandleProxy = ({ proxy }: { proxy: ProxyType }): HandleProxyUrl
 
 		return requestUrlParsed.href;
 	};
-
-	return handleProxyUrl;
 };
 
-interface Options {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	[key: string]: any;
-}
+type OverrideFunction = (...args: never[]) => unknown;
 
-/**
- * A function to override or merge parameters based on the provided override.
- * The override can be a function, an object, or undefined.
- *
- * @template T - Type of the primary parameter.
- * @template U - Type of the options parameter (optional).
- *
- * @param {Function | object | undefined | null | string} override - A function or an object used to override the primary parameter, or undefined.
- * @param {T} param - The primary parameter to be modified or overridden.
- * @param {U} [options] - Optional additional data passed to the override function.
- * @param {boolean} [isReplace=false] - If true, the override will replace the entire primary parameter.
- * @returns {T} - The resulting modified parameter.
- *
- * @throws {Error} If the `override` is not a function or an object.
- */
-function overrideParam<T, U = Options>(
-	override: Function | object | undefined | null | string,
+const overrideParam = <T, U>(
+	name: string,
+	override: OverrideFunction | object | undefined | null | string,
 	param: T,
 	options: U,
-	isReplace: boolean = false
-): T {
-	if (override === undefined) return param as T;
+	isReplace = false
+): Effect.Effect<T, HookError> =>
+	Effect.try({
+		try: () => {
+			if (override === undefined) return param;
+			if (typeof override === 'function') {
+				return (override as (param: T, options: U) => T)(param, options);
+			}
+			if (typeof override === 'object' && override !== null && !isReplace) {
+				return { ...param, ...(override as Partial<T>) } as T;
+			}
+			if (isReplace) return override as T;
+			throw new TypeError(`${name} must be a function or an object`);
+		},
+		catch: (cause) =>
+			new HookError({
+				hook: name,
+				cause,
+				message: `Failed while evaluating ${name}`
+			})
+	});
 
-	if (typeof override === 'function') {
-		return override(param as (param: T, options: U) => T, options as U) as T;
-	}
+const invokeHook = <A>(
+	name: string,
+	evaluate: () => MaybePromise<A>
+): Effect.Effect<A, HookError> =>
+	Effect.tryPromise({
+		try: async () => await evaluate(),
+		catch: (cause) =>
+			new HookError({
+				hook: name,
+				cause,
+				message: `Failed while executing ${name}`
+			})
+	});
 
-	if (typeof override === 'object' && !isReplace) {
-		return { ...param, ...(override as Partial<T>) } as T;
-	}
-
-	if (isReplace) {
-		return override as T;
-	}
-
-	throw new Error(`override should be a function or an object. It is ${typeof override}.`);
-}
-
-const handleAction = async <T = object>({
+const handleAction = <T>({
 	name,
-	conditionFn,
+	condition,
 	params,
 	action
 }: {
-	name: string;
-	conditionFn?: (params: T) => boolean;
-	params: T;
-	action: (params: T) => void;
-}): Promise<void> => {
-	if (conditionFn === undefined) return;
-
-	if (typeof conditionFn === 'function') {
-		let result;
-		try {
-			result = await conditionFn(params);
-		} catch (error) {
-			throw new Error(`Error while executing ${name}`, { cause: error });
-		}
-
-		if (typeof result !== 'boolean') {
-			throw new Error(
-				`${name} should return boolean. It has returned value with type ${typeof conditionFn}.`
-			);
-		}
-
-		if (result) await action(params);
-
-		return;
+	readonly name: string;
+	readonly condition?: (params: T) => MaybePromise<boolean>;
+	readonly params: T;
+	readonly action: (params: T) => Effect.Effect<void, InterceptionError>;
+}): Effect.Effect<void, InterceptionError> => {
+	if (condition === undefined) return Effect.void;
+	if (typeof condition !== 'function') {
+		return Effect.fail(
+			new HookError({
+				hook: name,
+				cause: condition,
+				message: `${name} must be a function`
+			})
+		);
 	}
 
-	throw new Error(`${name} is not a function. It is ${typeof conditionFn}.`);
+	return Effect.gen(function* () {
+		const result = yield* invokeHook(name, () => condition(params));
+		if (typeof result !== 'boolean') {
+			return yield* new HookError({
+				hook: name,
+				cause: result,
+				message: `${name} must return a boolean`
+			});
+		}
+		if (result) yield* action(params);
+	});
 };
 
 export const handleOverrideRequest = ({
@@ -150,26 +149,43 @@ export const handleOverrideRequest = ({
 	overrideRequestHeaders,
 	proxyUrl
 }: {
-	overrideRequestOptions?: ProxyConfig['overrideRequestOptions'];
-	overrideRequestBody?: ProxyConfig['overrideRequestBody'];
-	overrideRequestHeaders?: ProxyConfig['overrideRequestHeaders'];
-	request: InstanceType<typeof Request>;
-	proxyUrl: string;
-}): RequestInit => {
-	const param = {
-		method: request.method(),
-		headers: request.headers() as Record<string, string>,
-		body: request.postData()
-	};
-	const additionalParams = { request: request.transferObject(), proxyUrl };
-	const requestOptions = overrideParam(overrideRequestOptions, param, additionalParams);
-	const headers = overrideParam(overrideRequestHeaders, param.headers, additionalParams);
-	const body = overrideParam(overrideRequestBody, param.body, additionalParams, true);
+	readonly overrideRequestOptions?: ProxyConfig['overrideRequestOptions'];
+	readonly overrideRequestBody?: ProxyConfig['overrideRequestBody'];
+	readonly overrideRequestHeaders?: ProxyConfig['overrideRequestHeaders'];
+	readonly request: Request;
+	readonly proxyUrl: string;
+}): Effect.Effect<RequestInit, HookError> =>
+	Effect.gen(function* () {
+		const param = {
+			method: request.method(),
+			headers: request.headers(),
+			body: request.postData()
+		};
+		const additionalParams = { request: request.transferObject(), proxyUrl };
+		const requestOptions = yield* overrideParam(
+			'overrideRequestOptions',
+			overrideRequestOptions,
+			param,
+			additionalParams
+		);
+		const headers = yield* overrideParam(
+			'overrideRequestHeaders',
+			overrideRequestHeaders,
+			param.headers,
+			additionalParams
+		);
+		const body = yield* overrideParam(
+			'overrideRequestBody',
+			overrideRequestBody,
+			param.body,
+			additionalParams,
+			true
+		);
 
-	return { ...requestOptions, headers, body };
-};
+		return { ...requestOptions, headers, body } as RequestInit;
+	});
 
-export const handleOverrideResponse = async ({
+export const handleOverrideResponse = ({
 	response,
 	responseFromProxyRequest,
 	overrideResponseHeaders,
@@ -177,144 +193,103 @@ export const handleOverrideResponse = async ({
 	overrideResponseOptions,
 	request
 }: {
-	response: ResponseForRequest;
-	responseFromProxyRequest?: Response;
-	overrideResponseHeaders?: CommonConfig['overrideResponseHeaders'];
-	overrideResponseBody?: CommonConfig['overrideResponseBody'];
-	overrideResponseOptions?: CommonConfig['overrideResponseOptions'];
-	request: InstanceType<typeof Request>;
-}): Promise<ResponseForRequest> => {
-	const additionalParams = {
-		response,
-		responseFromProxyRequest,
-		request: request.transferObject()
-	};
-	const responseOptions = overrideParam(
-		overrideResponseOptions,
-		response as ResponseForRequest,
-		additionalParams
-	);
-	const headers = overrideParam(
-		overrideResponseHeaders,
-		response.headers as ResponseForRequest['headers'],
-		additionalParams
-	);
-	const body = overrideParam(overrideResponseBody, response.body, additionalParams, true);
+	readonly response: ResponseForRequest;
+	readonly responseFromProxyRequest?: Response;
+	readonly overrideResponseHeaders?: CommonConfig['overrideResponseHeaders'];
+	readonly overrideResponseBody?: CommonConfig['overrideResponseBody'];
+	readonly overrideResponseOptions?: CommonConfig['overrideResponseOptions'];
+	readonly request: Request;
+}): Effect.Effect<ResponseForRequest, HookError> =>
+	Effect.gen(function* () {
+		const additionalParams = {
+			response,
+			responseFromProxyRequest,
+			request: request.transferObject()
+		};
+		const responseOptions = yield* overrideParam(
+			'overrideResponseOptions',
+			overrideResponseOptions,
+			response,
+			additionalParams
+		);
+		const headers = yield* overrideParam(
+			'overrideResponseHeaders',
+			overrideResponseHeaders,
+			response.headers,
+			additionalParams
+		);
+		const body = yield* overrideParam(
+			'overrideResponseBody',
+			overrideResponseBody,
+			response.body,
+			additionalParams,
+			true
+		);
 
-	return { ...responseOptions, headers, body };
-};
-
-/**
- * Handles the response of the intercepted request.
- * @param params - The parameters for handling the response.
- * @returns {Promise<boolean>} true if request handled
- */
-export const handleResponse = async ({
-	request,
-	response,
-	responseFromProxyRequest,
-	onResponse,
-	overrideResponseHeaders,
-	overrideResponseBody,
-	overrideResponseOptions,
-	ignoreOnResponse,
-	nextOnResponse,
-	abortOnResponse
-}: {
-	request: InstanceType<typeof Request>;
-	response: ResponseForRequest;
-	responseFromProxyRequest?: Response;
-	onResponse: CommonConfig['onResponse'];
-	overrideResponseHeaders?: CommonConfig['overrideResponseHeaders'];
-	overrideResponseBody?: CommonConfig['overrideResponseBody'];
-	overrideResponseOptions?: CommonConfig['overrideResponseOptions'];
-	ignoreOnResponse?: CommonConfig['ignoreOnResponse'];
-	nextOnResponse?: CommonConfig['nextOnResponse'];
-	abortOnResponse?: CommonConfig['abortOnResponse'];
-}): Promise<boolean | undefined> => {
-	const respondOptions = await handleOverrideResponse({
-		response,
-		responseFromProxyRequest,
-		overrideResponseHeaders,
-		overrideResponseBody,
-		overrideResponseOptions,
-		request
+		return { ...responseOptions, headers, body };
 	});
-	const params = {
-		request: request.transferObject(),
-		response,
-		responseFromProxyRequest,
-		url: new URL(request.url())
-	};
-
-	await handleAction({
-		name: 'ignoreOnResponse',
-		conditionFn: ignoreOnResponse,
-		params,
-		action: request.ignore
-	});
-	if (request.isRequestHandled()) return true;
-
-	await handleAction({
-		name: 'abortOnResponse',
-		conditionFn: abortOnResponse,
-		params,
-		action: request.abort
-	});
-	if (request.isRequestHandled()) return true;
-
-	await handleAction({
-		name: 'nextOnResponse',
-		conditionFn: nextOnResponse,
-		params,
-		action: request.next
-	});
-	if (request.isRequestHandled()) return true;
-	const isHandledOnResponse = await handleOnResponse({
-		onResponse,
-		request,
-		responseFromProxyRequest,
-		response
-	});
-	if (isHandledOnResponse) return true;
-	await request.respond(respondOptions);
-	return false;
-};
 
 export const handleMatch = ({
 	baseUrl,
 	url,
 	match,
-	request
+	request,
+	name = 'match'
 }: {
-	baseUrl: string;
-	url: string;
-	match?: Match | Match[];
-	request: InstanceType<typeof Request>;
-}): undefined | Match => {
-	if (match === undefined) return undefined;
-
+	readonly baseUrl: string;
+	readonly url: string;
+	readonly match?: Match | Match[];
+	readonly request: Request;
+	readonly name?: string;
+}): Effect.Effect<Match | undefined, HookError> => {
+	if (match === undefined) return Effect.succeed(undefined);
 	const matches = Array.isArray(match) ? match : [match];
-	const matchChecker = (match: Match) => {
-		const isMatched = urlMatches({
-			parsedUrl: new URL(url),
-			baseUrl,
-			urlString: url,
-			match,
-			request: request.transferObject()
-		});
-		if (isMatched) return match;
-	};
 
-	return matches.find(matchChecker);
+	return Effect.gen(function* () {
+		for (const rule of matches) {
+			const isMatched = yield* invokeHook(name, () =>
+				urlMatches({
+					parsedUrl: new URL(url),
+					baseUrl,
+					urlString: url,
+					match: rule,
+					request: request.transferObject()
+				})
+			);
+			if (isMatched) return rule;
+		}
+		return undefined;
+	});
 };
 
-/**
- * Handles the configuration for the intercepted request.
- * @param params - The parameters for handling the config.
- * @returns {Promise<boolean>} true if request handled
- */
-export const handleRequestConfig = async ({
+export const handleOnRequest = ({
+	onRequest,
+	request
+}: {
+	readonly onRequest?: CommonConfig['onRequest'];
+	readonly request: Request;
+}): Effect.Effect<void, HookError> => {
+	if (onRequest === undefined) return Effect.void;
+	if (typeof onRequest !== 'function') {
+		return Effect.fail(
+			new HookError({
+				hook: 'onRequest',
+				cause: onRequest,
+				message: 'onRequest must be a function'
+			})
+		);
+	}
+
+	return invokeHook('onRequest', () =>
+		onRequest({
+			action: request.getActionMethods(),
+			url: new URL(request.url()),
+			request: request.transferObject()
+		})
+	);
+};
+
+export const handleRequestConfig = ({
 	request,
 	match,
 	ignore,
@@ -322,91 +297,82 @@ export const handleRequestConfig = async ({
 	next,
 	onRequest
 }: {
-	request: InstanceType<typeof Request>;
-	match?: Match | Match[];
-	ignore?: Match | Match[];
-	abort?: Match | Match[];
-	next?: Match | Match[];
-	onRequest?: CommonConfig['onRequest'];
-}): Promise<boolean | undefined> => {
-	const rawUrl = request.url();
-	const parsedUrl = new URL(rawUrl);
-	parsedUrl.search = '';
-	const url = parsedUrl.toString();
-	const baseUrl = parsedUrl.origin;
+	readonly request: Request;
+	readonly match?: Match | Match[];
+	readonly ignore?: Match | Match[];
+	readonly abort?: Match | Match[];
+	readonly next?: Match | Match[];
+	readonly onRequest?: CommonConfig['onRequest'];
+}): Effect.Effect<RequestConfigOutcome, InterceptionError> =>
+	Effect.gen(function* () {
+		const parsedUrl = yield* invokeHook('requestUrl', () => new URL(request.url()));
+		parsedUrl.search = '';
+		const url = parsedUrl.toString();
+		const baseUrl = parsedUrl.origin;
 
-	const ignoreRule = handleMatch({ baseUrl, url, match: ignore, request });
-	if (ignoreRule !== undefined) {
-		request.setStatus({ ignore: ignoreRule });
-		await request.ignore();
-		return true;
-	}
-
-	const abortRule = handleMatch({ baseUrl, url, match: abort, request });
-	if (abortRule !== undefined) {
-		request.setStatus({ abort: abortRule });
-		await request.abort();
-		return true;
-	}
-
-	const nextRule = handleMatch({ baseUrl, url, match: next, request });
-	if (nextRule !== undefined) {
-		request.setStatus({ next: nextRule });
-		await request.next();
-		return true;
-	}
-
-	const matchRule = handleMatch({ baseUrl, url, match, request });
-	if (matchRule === undefined) return true;
-	request.setStatus({ match: matchRule });
-
-	await handleOnRequest({ onRequest, request });
-	if (request.isRequestHandled()) return true;
-
-	return false;
-};
-
-export const handleOnRequest = async ({
-	onRequest,
-	request
-}: {
-	onRequest?: CommonConfig['onRequest'];
-	request: InstanceType<typeof Request>;
-}): Promise<boolean | undefined> => {
-	if (onRequest === undefined) return;
-
-	if (typeof onRequest === 'function') {
-		await onRequest({
-			action: request.getActionMethods(),
-			url: new URL(request.url()),
-			request: request.transferObject()
+		const ignoreRule = yield* handleMatch({
+			baseUrl,
+			url,
+			match: ignore,
+			request,
+			name: 'ignore'
 		});
+		if (ignoreRule !== undefined) {
+			request.setStatus({ ignore: ignoreRule });
+			yield* request.ignoreEffect;
+			return resolved;
+		}
 
-		return request.isRequestHandled();
-	}
+		const abortRule = yield* handleMatch({
+			baseUrl,
+			url,
+			match: abort,
+			request,
+			name: 'abort'
+		});
+		if (abortRule !== undefined) {
+			request.setStatus({ abort: abortRule });
+			yield* request.abortEffect;
+			return resolved;
+		}
 
-	throw new Error(`onRequest is not a function. It is ${typeof onRequest}.`);
-};
+		const nextRuleMatch = yield* handleMatch({
+			baseUrl,
+			url,
+			match: next,
+			request,
+			name: 'next'
+		});
+		if (nextRuleMatch !== undefined) {
+			request.setStatus({ next: nextRuleMatch });
+			yield* request.nextEffect;
+			return nextRule;
+		}
+
+		const matchRule = yield* handleMatch({ baseUrl, url, match, request });
+		if (matchRule === undefined) return unmatched;
+		request.setStatus({ match: matchRule });
+
+		yield* handleOnRequest({ onRequest, request });
+		if (request.isResolutionHandled()) return resolved;
+		if (request.isNextCalled) return nextRule;
+		return matched;
+	});
 
 export const handlePathRewrite = ({
 	pathRewrite,
 	proxyUrl,
 	request
 }: {
-	pathRewrite: ProxyConfig['pathRewrite'];
-	proxyUrl: string;
-	request: InstanceType<typeof Request>;
+	readonly pathRewrite: ProxyConfig['pathRewrite'];
+	readonly proxyUrl: string;
+	readonly request: Request;
 }): string => {
 	if (pathRewrite === undefined) return proxyUrl;
-
-	if (typeof pathRewrite === 'function') {
-		const urlInstance = new URL(proxyUrl);
-		urlInstance.pathname = pathRewrite(urlInstance.pathname, request.transferObject());
-
-		return urlInstance.toString();
-	}
-
-	throw new Error(`pathRewrite is not a function. It is ${typeof pathRewrite}.`);
+	if (typeof pathRewrite !== 'function') throw new TypeError('pathRewrite must be a function');
+	const url = new URL(proxyUrl);
+	url.pathname = pathRewrite(url.pathname, request.transferObject());
+	return url.toString();
 };
 
 export const handleUrlRewrite = ({
@@ -414,69 +380,27 @@ export const handleUrlRewrite = ({
 	proxyUrl,
 	request
 }: {
-	urlRewrite: ProxyConfig['urlRewrite'];
-	proxyUrl: string;
-	request: InstanceType<typeof Request>;
+	readonly urlRewrite: ProxyConfig['urlRewrite'];
+	readonly proxyUrl: string;
+	readonly request: Request;
 }): string => {
 	if (urlRewrite === undefined) return proxyUrl;
-
-	if (typeof urlRewrite === 'function') return urlRewrite(proxyUrl, request.transferObject());
-
-	throw new Error(`urlRewrite is not a function. It is ${typeof urlRewrite}.`);
-};
-
-export const getResponse = async (responseFromProxyRequest: Response) => {
-	const response = {
-		status: responseFromProxyRequest.status,
-		headers: responseFromProxyRequest.headers.raw(),
-		body: Buffer.from(await responseFromProxyRequest.arrayBuffer()),
-		contentType: responseFromProxyRequest.headers.get('content-type') || ''
-	};
-
-	return response;
-};
-
-export const handleOnResponse = async ({
-	onResponse,
-	responseFromProxyRequest,
-	response,
-	request
-}: {
-	onResponse?: CommonConfig['onResponse'];
-	responseFromProxyRequest?: Response;
-	response: ResponseForRequest;
-	request: InstanceType<typeof Request>;
-}): Promise<boolean | undefined> => {
-	if (onResponse === undefined) return;
-
-	if (typeof onResponse === 'function') {
-		await onResponse({
-			response,
-			responseFromProxyRequest,
-			request: request.transferObject(),
-			action: request.getActionMethods(),
-			url: new URL(request.url())
-		});
-
-		return request.isRequestHandled();
-	}
-
-	throw new Error(`onResponse is not a function. It is ${typeof onResponse}.`);
+	if (typeof urlRewrite !== 'function') throw new TypeError('urlRewrite must be a function');
+	return urlRewrite(proxyUrl, request.transferObject());
 };
 
 export const handleFilePath = ({
 	file,
 	request
 }: {
-	file: ConfigForFile['file'];
-	request: InstanceType<typeof Request>;
-}): string => {
-	if (typeof file === 'string') return file;
-	const url = request.url();
-	if (typeof file === 'function') return file(url, request.transferObject());
-
-	throw new Error(`file is not a string or a function. It is ${typeof file}.`);
-};
+	readonly file: ConfigForFile['file'];
+	readonly request: Request;
+}): Effect.Effect<string, HookError> =>
+	invokeHook('file', () => {
+		if (typeof file === 'string') return file;
+		if (typeof file === 'function') return file(request.url(), request.transferObject());
+		throw new TypeError('file must be a string or a function');
+	});
 
 export const handleProxyUrl = ({
 	requestUrl,
@@ -485,120 +409,47 @@ export const handleProxyUrl = ({
 	urlRewrite,
 	request
 }: {
-	requestUrl: string;
-	handleProxyUrl: HandleProxyUrl;
-	pathRewrite: ProxyConfig['pathRewrite'];
-	urlRewrite: ProxyConfig['urlRewrite'];
-	request: InstanceType<typeof Request>;
-}): string => {
-	let proxyUrl = handleProxyUrl(requestUrl, request.transferObject());
-	proxyUrl = handleUrlRewrite({ urlRewrite, proxyUrl, request });
-	proxyUrl = handlePathRewrite({ pathRewrite, proxyUrl, request });
-
-	return proxyUrl;
-};
-
-const handleProxyRequest = async ({
-	request,
-	pathRewrite,
-	overrideRequestOptions,
-	overrideRequestBody,
-	overrideRequestHeaders,
-	urlRewrite,
-	handlers,
-	onError
-}: {
-	request: InstanceType<typeof Request>;
-	pathRewrite: ProxyConfig['pathRewrite'];
-	overrideRequestOptions: ProxyConfig['overrideRequestOptions'];
-	overrideRequestBody: ProxyConfig['overrideRequestBody'];
-	overrideRequestHeaders: ProxyConfig['overrideRequestHeaders'];
-	urlRewrite: ProxyConfig['urlRewrite'];
-	handlers: { handleProxyUrl: HandleProxyUrl };
-	onError?: CommonConfig['onError'];
-}): Promise<{
-	response?: ResponseForRequest;
-	responseFromProxyRequest?: Response;
-	error?: unknown;
-}> => {
-	const proxyUrl = handleProxyUrl({
-		requestUrl: request.url(),
-		handleProxyUrl: handlers.handleProxyUrl,
-		pathRewrite,
-		urlRewrite,
-		request
-	});
-	const requestOptions = handleOverrideRequest({
-		overrideRequestOptions,
-		overrideRequestBody,
-		overrideRequestHeaders,
-		request,
-		proxyUrl
+	readonly requestUrl: string;
+	readonly handleProxyUrl: HandleProxyUrl;
+	readonly pathRewrite: ProxyConfig['pathRewrite'];
+	readonly urlRewrite: ProxyConfig['urlRewrite'];
+	readonly request: Request;
+}): Effect.Effect<string, HookError> =>
+	invokeHook('proxyUrl', () => {
+		let proxyUrl = handleProxyUrl(requestUrl, request.transferObject());
+		proxyUrl = handleUrlRewrite({ urlRewrite, proxyUrl, request });
+		return handlePathRewrite({ pathRewrite, proxyUrl, request });
 	});
 
-	try {
-		request.setStatus({ proxyUrl, requestOptions });
-		const responseFromProxyRequest = await fetch(proxyUrl, requestOptions);
-		const response = await getResponse(responseFromProxyRequest);
+export const getResponse = (
+	responseFromProxyRequest: Response,
+	proxyUrl: string
+): Effect.Effect<ResponseForRequest, ProxyResponseError> =>
+	Effect.tryPromise({
+		try: async () => {
+			const headers: Record<string, string | string[]> = Object.fromEntries(
+				responseFromProxyRequest.headers.entries()
+			);
+			const setCookieHeaders = responseFromProxyRequest.headers.getSetCookie();
+			if (setCookieHeaders.length > 0) headers['set-cookie'] = setCookieHeaders;
 
-		return { response, responseFromProxyRequest };
-	} catch (error) {
-		request.log.proxyRequestError(error);
+			return {
+				status: responseFromProxyRequest.status,
+				headers,
+				body: Buffer.from(await responseFromProxyRequest.arrayBuffer()),
+				contentType: responseFromProxyRequest.headers.get('content-type') ?? ''
+			};
+		},
+		catch: (cause) =>
+			new ProxyResponseError({
+				proxyUrl,
+				cause,
+				message: `Failed to read the proxy response from ${proxyUrl}`
+			})
+	});
 
-		return { error };
-	}
-};
-
-export const handleFileRequest = async ({
-	file,
-	request
-}: {
-	file: ConfigForFile['file'];
-	request: InstanceType<typeof Request>;
-}): Promise<{ response?: ResponseForRequest; error?: unknown }> => {
-	const path = handleFilePath({ file, request });
-	request.setStatus({ filePath: path });
-	try {
-		const body = await fs.readFileSync(path);
-		// TODO: add better content type detection
-		const contentType = path.endsWith('.json') ? 'application/json' : 'text/plain';
-		const response = { body, status: 200, headers: {}, contentType };
-
-		return { response };
-	} catch (error) {
-		request.log.fileReadError(error);
-
-		return { error };
-	}
-};
-
-export const handleOnError = async ({
+const handleProxyRequest = ({
 	request,
-	error,
-	onError
-}: {
-	request: InstanceType<typeof Request>;
-	error: unknown;
-	onError?: CommonConfig['onError'];
-}) => {
-	if (onError === undefined) return;
-
-	if (typeof onError === 'function') {
-		const response = await onError(error, {
-			request: request.transferObject(),
-			action: request.getActionMethods(),
-			url: new URL(request.url())
-		});
-
-		return response;
-	}
-
-	throw new Error(`onError is not a function. It is ${typeof onError}.`);
-};
-
-export const handleRequest = async ({
-	request,
-	file,
 	pathRewrite,
 	overrideRequestOptions,
 	overrideRequestBody,
@@ -606,34 +457,220 @@ export const handleRequest = async ({
 	urlRewrite,
 	handlers
 }: {
-	request: InstanceType<typeof Request>;
-	file?: ConfigForFile['file'];
-	pathRewrite: ProxyConfig['pathRewrite'];
-	overrideRequestOptions: ProxyConfig['overrideRequestOptions'];
-	overrideRequestBody: ProxyConfig['overrideRequestBody'];
-	overrideRequestHeaders: ProxyConfig['overrideRequestHeaders'];
-	urlRewrite: ProxyConfig['urlRewrite'];
-	handlers: { handleProxyUrl: HandleProxyUrl };
-}): Promise<{
-	response?: ResponseForRequest;
-	responseFromProxyRequest?: Response;
-	error?: unknown;
-}> => {
-	if (file) {
-		const { response, error } = await handleFileRequest({ file, request });
-
-		return { response, error };
-	} else {
-		const { response, responseFromProxyRequest, error } = await handleProxyRequest({
-			request,
+	readonly request: Request;
+	readonly pathRewrite: ProxyConfig['pathRewrite'];
+	readonly overrideRequestOptions: ProxyConfig['overrideRequestOptions'];
+	readonly overrideRequestBody: ProxyConfig['overrideRequestBody'];
+	readonly overrideRequestHeaders: ProxyConfig['overrideRequestHeaders'];
+	readonly urlRewrite: ProxyConfig['urlRewrite'];
+	readonly handlers: { readonly handleProxyUrl: HandleProxyUrl };
+}): Effect.Effect<SourceResponse, InterceptionError, ProxyTransport> =>
+	Effect.gen(function* () {
+		const proxyUrl = yield* handleProxyUrl({
+			requestUrl: request.url(),
+			handleProxyUrl: handlers.handleProxyUrl,
 			pathRewrite,
+			urlRewrite,
+			request
+		});
+		const requestOptions = yield* handleOverrideRequest({
 			overrideRequestOptions,
 			overrideRequestBody,
 			overrideRequestHeaders,
-			urlRewrite,
-			handlers
+			request,
+			proxyUrl
 		});
+		request.setStatus({ proxyUrl, requestOptions });
 
-		return { response, responseFromProxyRequest, error };
+		const transport = yield* ProxyTransport;
+		const responseFromProxyRequest = yield* transport.execute(
+			request.url(),
+			proxyUrl,
+			requestOptions
+		);
+		const response = yield* getResponse(responseFromProxyRequest, proxyUrl);
+		return { response, responseFromProxyRequest };
+	});
+
+export const handleFileRequest = ({
+	file,
+	request
+}: {
+	readonly file: ConfigForFile['file'];
+	readonly request: Request;
+}): Effect.Effect<SourceResponse, InterceptionError, FileSystem.FileSystem> =>
+	Effect.gen(function* () {
+		const path = yield* handleFilePath({ file, request });
+		request.setStatus({ filePath: path });
+		const fs = yield* FileSystem.FileSystem;
+		const body = yield* fs.readFile(path).pipe(
+			Effect.mapError(
+				(cause) =>
+					new FileReadError({
+						path,
+						requestUrl: request.url(),
+						cause,
+						message: `Failed to read ${path} for ${request.url()}`
+					})
+			)
+		);
+
+		return {
+			response: {
+				body: Buffer.from(body),
+				status: 200,
+				headers: {},
+				contentType: path.endsWith('.json') ? 'application/json' : 'text/plain'
+			}
+		};
+	});
+
+export const handleRequest = ({
+	request,
+	config
+}: {
+	readonly request: Request;
+	readonly config: ProcessedInterceptorConfig;
+}): Effect.Effect<SourceResponse, InterceptionError, FileSystem.FileSystem | ProxyTransport> => {
+	if (config.file !== undefined) {
+		return handleFileRequest({ file: config.file, request });
 	}
+
+	return handleProxyRequest({
+		request,
+		pathRewrite: config.pathRewrite,
+		overrideRequestOptions: config.overrideRequestOptions,
+		overrideRequestBody: config.overrideRequestBody,
+		overrideRequestHeaders: config.overrideRequestHeaders,
+		urlRewrite: config.urlRewrite,
+		handlers: config.handlers
+	});
 };
+
+export const handleOnResponse = ({
+	onResponse,
+	responseFromProxyRequest,
+	response,
+	request
+}: {
+	readonly onResponse?: CommonConfig['onResponse'];
+	readonly responseFromProxyRequest?: Response;
+	readonly response: ResponseForRequest;
+	readonly request: Request;
+}): Effect.Effect<void, HookError> => {
+	if (onResponse === undefined) return Effect.void;
+	if (typeof onResponse !== 'function') {
+		return Effect.fail(
+			new HookError({
+				hook: 'onResponse',
+				cause: onResponse,
+				message: 'onResponse must be a function'
+			})
+		);
+	}
+
+	const params: OnResponseParams = {
+		response,
+		responseFromProxyRequest,
+		request: request.transferObject(),
+		action: request.getActionMethods(),
+		url: new URL(request.url())
+	};
+	return invokeHook('onResponse', () => onResponse(params));
+};
+
+export const handleResponse = ({
+	request,
+	response,
+	responseFromProxyRequest,
+	config
+}: {
+	readonly request: Request;
+	readonly response: ResponseForRequest;
+	readonly responseFromProxyRequest?: Response;
+	readonly config: ProcessedInterceptorConfig;
+}): Effect.Effect<RuleOutcome, InterceptionError> =>
+	Effect.gen(function* () {
+		const respondOptions = yield* handleOverrideResponse({
+			response,
+			responseFromProxyRequest,
+			overrideResponseHeaders: config.overrideResponseHeaders,
+			overrideResponseBody: config.overrideResponseBody,
+			overrideResponseOptions: config.overrideResponseOptions,
+			request
+		});
+		const params: ActionOnResponseParams = {
+			request: request.transferObject(),
+			response,
+			responseFromProxyRequest,
+			url: new URL(request.url())
+		};
+
+		yield* handleAction({
+			name: 'ignoreOnResponse',
+			condition: config.ignoreOnResponse,
+			params,
+			action: () => request.ignoreEffect
+		});
+		if (request.isResolutionHandled()) return resolved;
+
+		yield* handleAction({
+			name: 'abortOnResponse',
+			condition: config.abortOnResponse,
+			params,
+			action: () => request.abortEffect
+		});
+		if (request.isResolutionHandled()) return resolved;
+
+		yield* handleAction({
+			name: 'nextOnResponse',
+			condition: config.nextOnResponse,
+			params,
+			action: () => request.nextEffect
+		});
+		if (request.isNextCalled) return nextRule;
+
+		yield* handleOnResponse({
+			onResponse: config.onResponse,
+			request,
+			responseFromProxyRequest,
+			response
+		});
+		if (request.isResolutionHandled()) return resolved;
+		if (request.isNextCalled) return nextRule;
+
+		yield* request.respondEffect(respondOptions);
+		return resolved;
+	});
+
+export const handleOnError = ({
+	request,
+	error,
+	onError
+}: {
+	readonly request: Request;
+	readonly error: InterceptionError;
+	readonly onError?: CommonConfig['onError'];
+}): Effect.Effect<ResponseForRequest | void, HookError> => {
+	if (onError === undefined) return Effect.void;
+	if (typeof onError !== 'function') {
+		return Effect.fail(
+			new HookError({
+				hook: 'onError',
+				cause: onError,
+				message: 'onError must be a function'
+			})
+		);
+	}
+
+	return invokeHook('onError', () =>
+		onError(error, {
+			request: request.transferObject(),
+			action: request.getActionMethods(),
+			url: new URL(request.url())
+		})
+	);
+};
+
+export const logInterceptionError = (error: InterceptionError): Effect.Effect<void> =>
+	Effect.logError(error.message).pipe(Effect.annotateLogs({ errorTag: error._tag }));

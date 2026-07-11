@@ -1,6 +1,6 @@
 {
 	"name": "sahne-js",
-	"version": "1.0.4",
+	"version": "2.0.0",
 	"description": "SahneJs is a CLI tool designed for mocking, testing, and debugging by intercepting and manipulating requests. It leverages Puppeteer's interceptor to capture and manipulate specific requests. You can direct these requests to an internal development server or read them from a local file.",
 	"repository": {
 		"type": "git",
@@ -16,37 +16,46 @@
 		"interception"
 	],
 	"scripts": {
+		"prepack": "npm run build",
 		"prebuild": "rm -rf ./dist",
-		"build": "rollup -c",
-		"postbuild": "chmod +x ./dist/cli.*"
+		"build": "tsc -p tsconfig.json",
+		"postbuild": "chmod +x ./dist/cli.js",
+		"test": "vitest run",
+		"test:unit": "vitest run",
+		"typecheck": "tsc --noEmit && tsc -p tsconfig.test.json"
 	},
 	"author": "Kerem Atam",
 	"license": "MIT",
-	"main": "dist/index.cjs",
-	"module": "dist/index.mjs",
+	"type": "module",
+	"engines": {
+		"node": ">=22.18.0"
+	},
 	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
 	"devDependencies": {
-		"@rollup/plugin-commonjs": "^25.0.7",
-		"@rollup/plugin-json": "^6.1.0",
-		"@rollup/plugin-node-resolve": "^15.2.3",
-		"@rollup/plugin-typescript": "^11.1.6",
-		"@types/node": "^20.12.7",
-		"rollup": "^4.17.2",
-		"rollup-plugin-node-builtins": "^2.1.2",
-		"rollup-plugin-peer-deps-external": "^2.2.4",
-		"ts-node": "^10.9.2",
-		"tslib": "^2.6.2",
-		"typescript": "^5.4.5"
+		"@effect/vitest": "4.0.0-beta.97",
+		"@types/node": "^24.13.3",
+		"puppeteer": "^25.3.0",
+		"typescript": "^5.9.3",
+		"vitest": "^4.1.10"
 	},
 	"bin": {
-		"sahne": "./dist/cli.cjs"
+		"sahne": "./dist/cli.js"
 	},
 	"peerDependencies": {
-		"puppeteer": "^20.0.0 || ^21.0.0 || ^22.0.0 || ^23.0.0"
+		"puppeteer": "^20.0.0 || ^21.0.0 || ^22.0.0 || ^23.0.0 || ^24.0.0 || ^25.0.0"
 	},
 	"dependencies": {
-		"@web/config-loader": "^0.3.1",
-		"commander": "^12.0.0",
-		"node-fetch": "^3.3.2"
+		"@effect/platform-node-shared": "4.0.0-beta.97",
+		"effect": "4.0.0-beta.97"
 	}
 }

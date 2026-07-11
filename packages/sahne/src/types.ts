@@ -1,15 +1,13 @@
-import type { RequestInit, Response } from 'node-fetch';
-import type {
-	Browser,
-	HTTPRequest,
-	Page,
-	PuppeteerLaunchOptions,
-	ResponseForRequest
-} from 'puppeteer';
+import type { Browser, HTTPRequest, Page, ResponseForRequest } from 'puppeteer';
 import type { GoToOptions } from 'puppeteer';
-import type { HandleProxyUrl } from './utils/types';
+import type { URL } from 'node:url';
+import type { HandleProxyUrl } from './utils/types.js';
 
-import type { URL } from 'url';
+type PuppeteerLaunchOptions = NonNullable<
+	Parameters<(typeof import('puppeteer'))['default']['launch']>[0]
+>;
+
+export type MaybePromise<A> = A | PromiseLike<A>;
 
 export type Match = string | RegExp | ((url: URL, request: HTTPRequest) => boolean);
 
@@ -40,10 +38,10 @@ export declare interface SahneConfig {
 	 * Callbacks to be called before and after the launch and goto methods of Puppeteer.
 	 */
 	callback?: {
-		beforeLaunch?: () => void;
-		afterLaunch?: (browser: Browser) => void;
-		beforeGoto?: (browser: Browser, page: Page) => void;
-		afterGoto?: (browser: Browser, page: Page) => void;
+		beforeLaunch?: () => MaybePromise<void>;
+		afterLaunch?: (browser: Browser) => MaybePromise<void>;
+		beforeGoto?: (browser: Browser, page: Page) => MaybePromise<void>;
+		afterGoto?: (browser: Browser, page: Page) => MaybePromise<void>;
 	};
 }
 
@@ -99,7 +97,7 @@ export type OverrideRequestAdditionalParams = {
 export type ResponseFromProxyRequest = Response;
 
 export type OverrideResponseAdditionalParams = {
-	responseFromProxyRequest: ResponseFromProxyRequest;
+	responseFromProxyRequest?: ResponseFromProxyRequest;
 	response: ResponseForRequest;
 	request: HTTPRequest;
 };
@@ -127,9 +125,9 @@ export type OverrideResponseOptionsFunction = (
 ) => ResponseForRequest;
 
 export type Action = {
-	abort: () => void;
-	respond: (params: ResponseForRequest) => void;
-	ignore: () => void;
+	abort: () => Promise<void>;
+	respond: (params: ResponseForRequest) => Promise<void>;
+	ignore: () => Promise<void>;
 	next: () => void;
 };
 
@@ -221,7 +219,7 @@ export type CommonConfig = {
 	 * @param {URL} params.url - The URL object of the intercepted request.
 	 * @returns {void} - Returns void.
 	 */
-	onRequest?: (param: OnRequestParams) => void;
+	onRequest?: (param: OnRequestParams) => MaybePromise<void>;
 	/**
 	 * Intercepted request ignored (not intercepted) if the function returns true.
 	 * It will not be handled by any other following rules unlike next.
@@ -242,7 +240,7 @@ export type CommonConfig = {
 	 * @param {OnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {void} - Returns void.
 	 */
-	onResponse?: (params: OnResponseParams) => void;
+	onResponse?: (params: OnResponseParams) => MaybePromise<void>;
 	/**
 	 * Intercepted request ignored (not intercepted) if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
@@ -252,7 +250,7 @@ export type CommonConfig = {
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
 	 */
-	ignoreOnResponse?: (params: ActionOnResponseParams) => boolean;
+	ignoreOnResponse?: (params: ActionOnResponseParams) => MaybePromise<boolean>;
 	/**
 	 * Intercepted response aborted if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
@@ -262,7 +260,7 @@ export type CommonConfig = {
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
 	 */
-	abortOnResponse?: (params: ActionOnResponseParams) => boolean;
+	abortOnResponse?: (params: ActionOnResponseParams) => MaybePromise<boolean>;
 	/**
 	 * Intercepted response nexts to next interception rule if the function returns true.
 	 * @param {ActionOnResponseParams} params params to be passed to the function
@@ -272,25 +270,22 @@ export type CommonConfig = {
 	 * @param {ActionOnResponseParams['url']} params.url - The URL object of the intercepted request.
 	 * @returns {boolean} - Returns true if the request should be intercepted, false otherwise.
 	 */
-	nextOnResponse?: (params: ActionOnResponseParams) => boolean;
+	nextOnResponse?: (params: ActionOnResponseParams) => MaybePromise<boolean>;
 	/**
 	 * Overrirde response headers to be passed to Puppeteer's respond method
 	 */
 	overrideResponseHeaders?:
-		| Partial<ReturnType<OverrideResponseHeadersFunction>>
-		| OverrideResponseHeadersFunction;
+		Partial<ReturnType<OverrideResponseHeadersFunction>> | OverrideResponseHeadersFunction;
 	/**
 	 * Overrirde response headers to be passed to Puppeteer's respond method
 	 */
 	overrideResponseBody?:
-		| Partial<ReturnType<OverrideResponseBodyFunction>>
-		| OverrideResponseBodyFunction;
+		Partial<ReturnType<OverrideResponseBodyFunction>> | OverrideResponseBodyFunction;
 	/**
 	 * Overide response options of Puppeteer's respond method
 	 */
 	overrideResponseOptions?:
-		| Partial<ReturnType<OverrideResponseOptionsFunction>>
-		| OverrideResponseOptionsFunction;
+		Partial<ReturnType<OverrideResponseOptionsFunction>> | OverrideResponseOptionsFunction;
 	/**
 	 * The function to be called when the request handling fails.
 	 * @param {Error} error - The error object.
@@ -307,7 +302,7 @@ export type CommonConfig = {
 			action: Action;
 			url: URL;
 		}
-	) => void | ResponseForRequest;
+	) => MaybePromise<void | ResponseForRequest>;
 };
 
 export type FileConfig = {
@@ -343,20 +338,17 @@ export type ProxyConfig = {
 	 * Overrirde request headers to be passed to fetch method of NodeFetch
 	 */
 	overrideRequestHeaders?:
-		| Partial<ReturnType<OverrideRequestHeadersFunction>>
-		| OverrideRequestHeadersFunction;
+		Partial<ReturnType<OverrideRequestHeadersFunction>> | OverrideRequestHeadersFunction;
 	/**
 	 * Overrirde request headers to be passed to fetch method of NodeFetch
 	 */
 	overrideRequestBody?:
-		| Partial<ReturnType<OverrideRequestBodyFunction>>
-		| OverrideRequestBodyFunction;
+		Partial<ReturnType<OverrideRequestBodyFunction>> | OverrideRequestBodyFunction;
 	/**
 	 * Overrirde request headers to be passed to Puppeteer's fetch method
 	 */
 	overrideRequestOptions?:
-		| Partial<ReturnType<OverrideRequesOptionsFunction>>
-		| OverrideRequesOptionsFunction;
+		Partial<ReturnType<OverrideRequesOptionsFunction>> | OverrideRequesOptionsFunction;
 };
 
 type AllPropsNever<T> = {

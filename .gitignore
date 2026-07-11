@@ -29,3 +29,6 @@ coverage/
 *.idea
 *.idea.js
 *.idea.mjs
+
+# Local source references
+.repos/effect
