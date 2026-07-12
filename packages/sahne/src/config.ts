@@ -64,6 +64,146 @@ export const validateConfig = (
 		);
 	}
 
+	if (config.puppeteerOptions !== undefined) {
+		if (typeof config.puppeteerOptions !== 'object' || config.puppeteerOptions === null) {
+			return Effect.fail(
+				new ConfigValidationError({ message: 'puppeteerOptions must be an object' })
+			);
+		}
+
+		const puppeteerOptions = config.puppeteerOptions as Record<string, unknown>;
+		if (puppeteerOptions.launch !== undefined && puppeteerOptions.connect !== undefined) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message: 'puppeteerOptions cannot define both launch and connect'
+				})
+			);
+		}
+		for (const name of ['launch', 'connect'] as const) {
+			const options = puppeteerOptions[name];
+			if (
+				options !== undefined &&
+				(typeof options !== 'object' || options === null || Array.isArray(options))
+			) {
+				return Effect.fail(
+					new ConfigValidationError({
+						message: `puppeteerOptions.${name} must be an object`
+					})
+				);
+			}
+		}
+	}
+
+	if (config.browser !== undefined) {
+		if (
+			typeof config.browser !== 'object' ||
+			config.browser === null ||
+			Array.isArray(config.browser)
+		) {
+			return Effect.fail(new ConfigValidationError({ message: 'browser must be an object' }));
+		}
+
+		const browser = config.browser as Record<string, unknown>;
+		if (
+			browser.mode !== undefined &&
+			browser.mode !== 'auto' &&
+			browser.mode !== 'remote-debugging' &&
+			browser.mode !== 'launch'
+		) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message: 'browser.mode must be "auto", "remote-debugging", or "launch"'
+				})
+			);
+		}
+		if (
+			browser.channel !== undefined &&
+			browser.channel !== 'chrome' &&
+			browser.channel !== 'chrome-beta' &&
+			browser.channel !== 'chrome-canary' &&
+			browser.channel !== 'chrome-dev'
+		) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message:
+						'browser.channel must be "chrome", "chrome-beta", "chrome-canary", or "chrome-dev"'
+				})
+			);
+		}
+
+		const puppeteerOptions = config.puppeteerOptions as Record<string, unknown> | undefined;
+		if (browser.mode !== undefined && puppeteerOptions?.connect !== undefined) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message: 'browser.mode cannot be combined with puppeteerOptions.connect'
+				})
+			);
+		}
+		if (browser.channel !== undefined && puppeteerOptions?.connect !== undefined) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message: 'browser.channel cannot be combined with puppeteerOptions.connect'
+				})
+			);
+		}
+		if (browser.remoteDebuggingTimeout !== undefined && puppeteerOptions?.connect !== undefined) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message: 'browser.remoteDebuggingTimeout cannot be combined with puppeteerOptions.connect'
+				})
+			);
+		}
+		if (browser.mode === 'remote-debugging' && puppeteerOptions?.launch !== undefined) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message: 'browser.mode "remote-debugging" cannot be combined with puppeteerOptions.launch'
+				})
+			);
+		}
+		if (browser.mode === 'launch' && browser.channel !== undefined) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message: 'browser.channel cannot be used when browser.mode is "launch"'
+				})
+			);
+		}
+		if (browser.mode === 'launch' && browser.remoteDebuggingTimeout !== undefined) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message: 'browser.remoteDebuggingTimeout cannot be used when browser.mode is "launch"'
+				})
+			);
+		}
+		if (
+			browser.remoteDebuggingTimeout !== undefined &&
+			(typeof browser.remoteDebuggingTimeout !== 'number' ||
+				!Number.isFinite(browser.remoteDebuggingTimeout) ||
+				browser.remoteDebuggingTimeout <= 0)
+		) {
+			return Effect.fail(
+				new ConfigValidationError({
+					message: 'browser.remoteDebuggingTimeout must be a positive finite number'
+				})
+			);
+		}
+		if (
+			browser.indicator !== undefined &&
+			browser.indicator !== 'title' &&
+			browser.indicator !== 'none'
+		) {
+			return Effect.fail(
+				new ConfigValidationError({ message: 'browser.indicator must be "title" or "none"' })
+			);
+		}
+		for (const name of ['closeManagedPageOnExit', 'dangerouslyEnableForAllTabs'] as const) {
+			if (browser[name] !== undefined && typeof browser[name] !== 'boolean') {
+				return Effect.fail(
+					new ConfigValidationError({ message: `browser.${name} must be a boolean` })
+				);
+			}
+		}
+	}
+
 	if (config.callback !== undefined) {
 		if (typeof config.callback !== 'object' || config.callback === null) {
 			return Effect.fail(new ConfigValidationError({ message: 'callback must be an object' }));

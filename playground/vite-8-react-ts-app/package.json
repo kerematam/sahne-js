@@ -9,6 +9,9 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "sahne": "sahne",
+    "sahne:connect": "sahne --browser=remote-debugging",
+    "sahne:remote-debugging": "sahne --browser=remote-debugging",
+    "sahne:launch": "sahne --browser=launch",
     "typecheck": "tsc -b"
   },
   "dependencies": {
