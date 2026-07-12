@@ -142,6 +142,104 @@ describe('config validation', () => {
 			Effect.map((error) => assert.strictEqual(error._tag, 'ConfigValidationError'))
 		)
 	);
+
+	it.effect('rejects launch and connect options in the same config', () =>
+		validateConfig({
+			initialUrl: 'https://example.test',
+			puppeteerOptions: {
+				launch: { headless: true },
+				connect: { browserURL: 'http://127.0.0.1:9222' }
+			}
+		}).pipe(
+			Effect.flip,
+			Effect.map((error) => {
+				assert.strictEqual(error._tag, 'ConfigValidationError');
+				assert.strictEqual(error.message, 'puppeteerOptions cannot define both launch and connect');
+			})
+		)
+	);
+
+	it.effect('rejects invalid connected-browser options', () =>
+		Effect.forEach(
+			[
+				{
+					browser: { mode: 'permission' },
+					message: 'browser.mode must be "auto", "remote-debugging", or "launch"'
+				},
+				{
+					browser: { channel: 'chromium' },
+					message:
+						'browser.channel must be "chrome", "chrome-beta", "chrome-canary", or "chrome-dev"'
+				},
+				{
+					browser: { indicator: 'overlay' },
+					message: 'browser.indicator must be "title" or "none"'
+				},
+				{
+					browser: { remoteDebuggingTimeout: 0 },
+					message: 'browser.remoteDebuggingTimeout must be a positive finite number'
+				},
+				{
+					browser: { closeManagedPageOnExit: 'yes' },
+					message: 'browser.closeManagedPageOnExit must be a boolean'
+				},
+				{
+					browser: { dangerouslyEnableForAllTabs: 'yes' },
+					message: 'browser.dangerouslyEnableForAllTabs must be a boolean'
+				}
+			],
+			({ browser, message }) =>
+				validateConfig({ initialUrl: 'https://example.test', browser }).pipe(
+					Effect.flip,
+					Effect.map((error) => {
+						assert.strictEqual(error._tag, 'ConfigValidationError');
+						assert.strictEqual(error.message, message);
+					})
+				)
+		).pipe(Effect.asVoid)
+	);
+
+	it.effect('rejects contradictory high-level and raw browser acquisition options', () =>
+		Effect.forEach(
+			[
+				{
+					browser: { mode: 'auto' },
+					puppeteerOptions: { connect: { channel: 'chrome' } },
+					message: 'browser.mode cannot be combined with puppeteerOptions.connect'
+				},
+				{
+					browser: { channel: 'chrome' },
+					puppeteerOptions: { connect: { channel: 'chrome' } },
+					message: 'browser.channel cannot be combined with puppeteerOptions.connect'
+				},
+				{
+					browser: { remoteDebuggingTimeout: 5_000 },
+					puppeteerOptions: { connect: { channel: 'chrome' } },
+					message: 'browser.remoteDebuggingTimeout cannot be combined with puppeteerOptions.connect'
+				},
+				{
+					browser: { mode: 'remote-debugging' },
+					puppeteerOptions: { launch: { headless: true } },
+					message: 'browser.mode "remote-debugging" cannot be combined with puppeteerOptions.launch'
+				},
+				{
+					browser: { mode: 'launch', channel: 'chrome' },
+					puppeteerOptions: undefined,
+					message: 'browser.channel cannot be used when browser.mode is "launch"'
+				},
+				{
+					browser: { mode: 'launch', remoteDebuggingTimeout: 5_000 },
+					puppeteerOptions: undefined,
+					message: 'browser.remoteDebuggingTimeout cannot be used when browser.mode is "launch"'
+				}
+			],
+			({ browser, puppeteerOptions, message }) =>
+				validateConfig({ initialUrl: 'https://example.test', browser, puppeteerOptions }).pipe(
+					Effect.flip,
+					Effect.map((error) => assert.strictEqual(error.message, message))
+				)
+		).pipe(Effect.asVoid)
+	);
 });
 
 describe('proxy cancellation', () => {

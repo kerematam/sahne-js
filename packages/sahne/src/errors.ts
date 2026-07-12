@@ -15,6 +15,12 @@ export class BrowserLaunchError extends Data.TaggedError('BrowserLaunchError')<{
 	readonly message: string;
 }> {}
 
+export class BrowserConnectError extends Data.TaggedError('BrowserConnectError')<{
+	readonly cause: unknown;
+	readonly exposeCause?: boolean;
+	readonly message: string;
+}> {}
+
 export class PageSetupError extends Data.TaggedError('PageSetupError')<{
 	readonly operation: string;
 	readonly cause: unknown;
@@ -64,7 +70,12 @@ export type InterceptionError =
 	RequestActionError | ProxyRequestError | ProxyResponseError | FileReadError | HookError;
 
 export type RunnerError =
-	BrowserLaunchError | PageSetupError | NavigationError | HookError | RequestActionError;
+	| BrowserLaunchError
+	| BrowserConnectError
+	| PageSetupError
+	| NavigationError
+	| HookError
+	| RequestActionError;
 
 export type SahneError = ConfigLoadError | ConfigValidationError | InterceptionError | RunnerError;
 
@@ -72,6 +83,7 @@ const sahneErrorTags = new Set([
 	'ConfigLoadError',
 	'ConfigValidationError',
 	'BrowserLaunchError',
+	'BrowserConnectError',
 	'PageSetupError',
 	'NavigationError',
 	'RequestActionError',
@@ -107,6 +119,7 @@ const getCauseMessage = (cause: unknown): string | undefined => {
 
 export const formatSahneError = (error: SahneError): string => {
 	if (!('cause' in error)) return error.message;
+	if ('exposeCause' in error && error.exposeCause === false) return error.message;
 
 	const causeMessage = getCauseMessage(error.cause);
 	return causeMessage && causeMessage !== error.message.trim()

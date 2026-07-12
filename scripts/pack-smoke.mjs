@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
+const packageManifest = JSON.parse(readFileSync(join(root, 'packages/sahne/package.json'), 'utf8'));
 const temporaryDirectory = mkdtempSync(join(tmpdir(), 'sahne-pack-'));
 const npmEnvironment = {
 	...process.env,
@@ -55,7 +56,7 @@ try {
 		cwd: temporaryDirectory,
 		encoding: 'utf8'
 	}).trim();
-	assert.equal(version, '2.0.0');
+	assert.equal(version, packageManifest.version);
 
 	const declaration = readFileSync(
 		join(temporaryDirectory, 'node_modules/sahne-js/dist/index.d.ts'),

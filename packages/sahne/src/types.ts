@@ -6,8 +6,15 @@ import type { HandleProxyUrl } from './utils/types.js';
 type PuppeteerLaunchOptions = NonNullable<
 	Parameters<(typeof import('puppeteer'))['default']['launch']>[0]
 >;
+type PuppeteerConnectOptions = Parameters<(typeof import('puppeteer'))['default']['connect']>[0];
 
 export type MaybePromise<A> = A | PromiseLike<A>;
+
+export type SahneBrowserMode = 'auto' | 'remote-debugging' | 'launch';
+
+export type SahneBrowserChannel = 'chrome' | 'chrome-beta' | 'chrome-canary' | 'chrome-dev';
+
+export type SahnePageIndicator = 'title' | 'none';
 
 export type Match = string | RegExp | ((url: URL, request: HTTPRequest) => boolean);
 
@@ -29,13 +36,59 @@ export declare interface SahneConfig {
 		 * The options for Puppeteer's launch method.
 		 */
 		launch?: Partial<PuppeteerLaunchOptions>;
+		/**
+		 * The options for Puppeteer's connect method.
+		 * This is mutually exclusive with launch.
+		 */
+		connect?: PuppeteerConnectOptions;
+	};
+	/**
+	 * Sahne's browser acquisition and connected-browser behavior.
+	 */
+	browser?: {
+		/**
+		 * How Sahne acquires a browser.
+		 *
+		 * `auto` uses Chrome remote debugging in an interactive terminal and
+		 * launches an isolated browser in CI or other non-interactive environments.
+		 * Defaults to `auto` when no raw Puppeteer launch or connect options exist.
+		 */
+		mode?: SahneBrowserMode;
+		/**
+		 * Chrome channel used by `auto` and `remote-debugging` modes.
+		 * Defaults to `chrome`.
+		 */
+		channel?: SahneBrowserChannel;
+		/**
+		 * Time in milliseconds to wait for Chrome remote-debugging discovery and
+		 * approval. Defaults to 60 seconds.
+		 */
+		remoteDebuggingTimeout?: number;
+		/**
+		 * How Sahne marks the tab it creates in a connected browser.
+		 * Defaults to `title`, which prefixes the application title with
+		 * `🟢 Sahne — `.
+		 */
+		indicator?: SahnePageIndicator;
+		/**
+		 * Close Sahne's managed tab on clean exit. Defaults to `true`.
+		 * When false, Sahne removes its title marker and leaves the tab open.
+		 */
+		closeManagedPageOnExit?: boolean;
+		/**
+		 * Enable request interception on every existing and future tab in a
+		 * connected browser. This includes authenticated and sensitive tabs.
+		 * Defaults to `false` and is unnecessary for browsers Sahne launches.
+		 */
+		dangerouslyEnableForAllTabs?: boolean;
 	};
 	/**
 	 * The interceptor config to be used.
 	 */
 	interceptor?: InterceptorConfig | InterceptorConfig[];
 	/**
-	 * Callbacks to be called before and after the launch and goto methods of Puppeteer.
+	 * Callbacks to be called before and after browser acquisition and goto.
+	 * The existing beforeLaunch and afterLaunch names are also used in connect mode.
 	 */
 	callback?: {
 		beforeLaunch?: () => MaybePromise<void>;

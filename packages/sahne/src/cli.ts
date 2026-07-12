@@ -13,6 +13,7 @@ import { loadConfig } from './config.js';
 import { formatSahneError, isSahneError } from './errors.js';
 import { runEffect } from './run.js';
 import { ProxyTransport, PuppeteerLauncher } from './services.js';
+import type { SahneBrowserMode } from './types.js';
 
 const packageJson = JSON.parse(
 	readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -24,11 +25,23 @@ const configFile = Flag.string('file').pipe(
 	Flag.optional
 );
 
-const command = Command.make('sahne', { file: configFile }, ({ file }) =>
-	Effect.gen(function* () {
-		const config = yield* loadConfig(Option.isSome(file) ? file.value : undefined);
-		yield* Effect.scoped(runEffect(config));
-	})
+const browserMode = Flag.choice('browser', ['auto', 'remote-debugging', 'launch']).pipe(
+	Flag.withDescription('Browser mode: auto, remote-debugging, or launch'),
+	Flag.optional
+);
+
+const command = Command.make(
+	'sahne',
+	{ browser: browserMode, file: configFile },
+	({ browser, file }) =>
+		Effect.gen(function* () {
+			const config = yield* loadConfig(Option.isSome(file) ? file.value : undefined);
+			yield* Effect.scoped(
+				runEffect(config, {
+					browserMode: Option.isSome(browser) ? (browser.value as SahneBrowserMode) : undefined
+				})
+			);
+		})
 );
 
 const nodeBaseServices = Layer.mergeAll(
