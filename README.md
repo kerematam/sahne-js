@@ -19,26 +19,6 @@ SahneJS v2 is ESM-only and requires Node.js 22.18 or newer. Install SahneJS and 
 npm install --save-dev puppeteer sahne-js
 ```
 
-### Test a Local Tarball
-
-The publishable package is the `packages/sahne` workspace, not the repository
-root. Build and pack it from the repository root with:
-
-```sh
-npm run pack:sahne-js
-```
-
-This creates `sahne-js-2.0.0.tgz` in the repository root. Install that exact
-archive in the playground or another consumer:
-
-```sh
-cd playground/vite-8-react-ts-app
-npm install ../../sahne-js-2.0.0.tgz
-```
-
-Bare `npm pack` at the repository root is intentionally rejected because it
-would package the private monorepo rather than the `sahne-js` distribution.
-
 ## Quick Start (Mock an Endpoint)
 
 Create a `sahne.config.ts` file:
