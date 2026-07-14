@@ -6,6 +6,7 @@ export default defineConfig({
   initialUrl: target,
   browser: {
     mode: 'auto',
+    indicator: "none"
   },
   interceptor: {
     match: `${target}/**`,
