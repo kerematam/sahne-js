@@ -1,0 +1,7 @@
+{
+  "name": "sahne-js",
+  "compatibility_date": "2026-07-15",
+  "assets": {
+    "directory": "./playground/vite-8-react-ts-app/dist"
+  }
+}
