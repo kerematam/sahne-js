@@ -559,6 +559,7 @@ describe('high-level browser modes', () => {
 
 		assert.strictEqual(launchCalls, 0);
 		assert.strictEqual(connectOptions?.channel, 'chrome');
+		assert.deepEqual(connectOptions?.defaultViewport, { width: 0, height: 0 });
 		assert.strictEqual(connectTimeout, 60_000);
 		assert.strictEqual(browser.newPageCalls, 1);
 		assert.strictEqual(browser.disconnectCalls, 1);

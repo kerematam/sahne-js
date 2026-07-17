@@ -43,6 +43,7 @@ import {
 
 const resolved: RuleOutcome = { _tag: 'Resolved' };
 const nextRule: RuleOutcome = { _tag: 'NextRule' };
+const sahneViewport = { width: 0, height: 0 } as const;
 const titleIndicatorPrefix = '🟢 Sahne — ';
 const titleIndicatorStateKey = '__sahneTitleIndicator__';
 const dangerousAllTabsWarning =
@@ -495,12 +496,17 @@ export const runEffect = (
 						.connect(puppeteerOptions?.connect ?? {})
 						.pipe(Effect.map((browser): BrowserResource => ({ browser, ownership: 'connected' })))
 				: browserPolicy._tag === 'RemoteDebugging'
-					? launcher.connect({ channel: browserPolicy.channel }, remoteDebuggingTimeout).pipe(
-							Effect.mapError((cause) =>
-								remoteDebuggingConnectionError(browserPolicy.channel, cause)
-							),
-							Effect.map((browser): BrowserResource => ({ browser, ownership: 'connected' }))
-						)
+					? launcher
+							.connect(
+								{ channel: browserPolicy.channel, defaultViewport: sahneViewport },
+								remoteDebuggingTimeout
+							)
+							.pipe(
+								Effect.mapError((cause) =>
+									remoteDebuggingConnectionError(browserPolicy.channel, cause)
+								),
+								Effect.map((browser): BrowserResource => ({ browser, ownership: 'connected' }))
+							)
 					: launchBrowser();
 		const browserResource = yield* Effect.acquireRelease(acquireBrowser, releaseBrowser);
 		const { browser, ownership } = browserResource;
@@ -534,7 +540,7 @@ export const runEffect = (
 			});
 
 		const setSahneViewport = (page: Page): Effect.Effect<void, PageSetupError> =>
-			pageOperation('setViewport', () => page.setViewport({ width: 0, height: 0 }));
+			pageOperation('setViewport', () => page.setViewport(sahneViewport));
 
 		const setupTarget = (target: Target, setViewport: boolean) =>
 			Effect.gen(function* () {
