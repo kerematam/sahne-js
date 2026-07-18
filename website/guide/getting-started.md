@@ -106,10 +106,11 @@ An interactive run without `--browser=launch` uses the default `auto` mode. It r
 3. Enable remote debugging.
 4. Run `npx sahne` and approve Chrome's prompt.
 
-Read [Browser modes](./browser-modes.md) before using connected-browser options or the all-tabs escape hatch.
+Follow [Remote-debugging connection](./remote-debugging.md) for the complete setup, connection lifecycle, and troubleshooting steps. Read [Browser modes](./browser-modes.md) to compare it with an isolated launch.
 
 ## Next steps
 
 - [Proxy a local app](./proxy-local-app.md)
+- [Connect to your existing Chrome session](./remote-debugging.md)
 - [Learn matching and rule order](./matching-and-rules.md)
 - [Inspect every configuration option](../reference/configuration.md)

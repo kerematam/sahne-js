@@ -44,6 +44,10 @@ export default defineConfig({
 					{ text: 'Matching and rule order', link: '/guide/matching-and-rules' },
 					{ text: 'Rewrite and override', link: '/guide/rewrite-and-override' },
 					{ text: 'Browser modes', link: '/guide/browser-modes' },
+					{
+						text: 'Remote-debugging connection',
+						link: '/guide/remote-debugging'
+					},
 					{ text: 'Hooks and lifecycle', link: '/guide/hooks-and-lifecycle' },
 					{ text: 'Use without the CLI', link: '/guide/programmatic-api' }
 				]

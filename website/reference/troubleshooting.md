@@ -44,6 +44,8 @@ Or use an isolated browser:
 npx sahne --browser=launch
 ```
 
+See [Remote-debugging connection](../guide/remote-debugging.md) for the full connection checklist and ownership model.
+
 ## Remote debugging requires a newer Puppeteer
 
 Chrome channel discovery requires Puppeteer 24.32.0 or newer. Upgrade the peer dependency:

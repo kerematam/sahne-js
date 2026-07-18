@@ -41,6 +41,8 @@ npx sahne --browser=remote-debugging
 
 Sahne asks Puppeteer to discover the browser from the selected Chrome channel. It does not probe a fixed `127.0.0.1:9222` endpoint.
 
+See [Remote-debugging connection](./remote-debugging.md) for the complete setup, approval flow, safety behavior, and connection troubleshooting.
+
 Remote-debugging mode requires Puppeteer 24.32.0 or newer. With an older supported Puppeteer release:
 
 - `auto` warns and launches an isolated browser.
