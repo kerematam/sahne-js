@@ -2,6 +2,8 @@
 
 SahneJs is a CLI tool designed for mocking, testing, and debugging by intercepting and manipulating requests. It leverages Puppeteer's interceptor to capture and manipulate specific requests. You can direct these requests to an internal development server or read them from a local file.
 
+[Documentation](https://sahne-js-docs.kerem-atam.chatgpt.site) · [Getting started](https://sahne-js-docs.kerem-atam.chatgpt.site/guide/getting-started) · [Configuration reference](https://sahne-js-docs.kerem-atam.chatgpt.site/reference/configuration)
+
 ## Use Cases
 
 - Run your local single-page application on a production domain

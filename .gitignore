@@ -26,6 +26,10 @@ dist-ssr
 .idea
 coverage/
 
+# VitePress
+website/.vitepress/cache/
+website/.vitepress/dist/
+
 *.idea
 *.idea.js
 *.idea.mjs

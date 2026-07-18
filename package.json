@@ -11,11 +11,16 @@
 		"eslint": "^9.39.4",
 		"jiti": "^2.7.0",
 		"prettier": "^3.9.4",
-		"typescript-eslint": "^8.63.0"
+		"typescript-eslint": "^8.63.0",
+		"vitepress": "^1.6.4"
 	},
 	"scripts": {
 		"prepack": "node scripts/prevent-root-pack.mjs",
 		"pack:sahne-js": "npm pack --workspace packages/sahne",
+		"docs:dev": "vitepress dev website",
+		"docs:build": "vitepress build website",
+		"docs:preview": "vitepress preview website",
+		"sites:build": "npm run docs:build && node scripts/stage-docs-for-sites.mjs",
 		"lint": "prettier --check packages/sahne && eslint packages/sahne/src",
 		"build": "npm run build --workspaces",
 		"build:sahne-js": "npm run build --workspace sahne-js",
@@ -25,7 +30,7 @@
 		"test:integration": "npm test --prefix tests",
 		"test:pack": "node scripts/pack-smoke.mjs",
 		"typecheck": "npm run typecheck --workspace sahne-js && npm run build:sahne-js && npm run typecheck --prefix tests",
-		"verify": "npm run lint && npm run typecheck && npm run test:unit && npm run test:integration && npm run build --prefix playground/vite-8-react-ts-app && npm run test:pack"
+		"verify": "npm run lint && npm run docs:build && npm run typecheck && npm run test:unit && npm run test:integration && npm run build --prefix playground/vite-8-react-ts-app && npm run test:pack"
 	},
 	"workspaces": [
 		"packages/sahne"
