@@ -6,6 +6,9 @@ export default defineConfig({
 		'Intercept, proxy, and mock browser requests while testing local code against real sites.',
 	cleanUrls: true,
 	lastUpdated: true,
+	sitemap: {
+		hostname: 'https://sahne-js-docs.kerem-atam.chatgpt.site'
+	},
 	head: [
 		['meta', { name: 'theme-color', content: '#181411' }],
 		['meta', { property: 'og:type', content: 'website' }],
