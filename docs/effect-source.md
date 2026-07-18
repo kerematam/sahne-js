@@ -7,7 +7,7 @@ Status: current.
 - Effect version: `4.0.0-beta.97`
 - Source tag: `effect@4.0.0-beta.97`
 - Source commit: `f643dbb265093065dc0a61ca6133693dc2401678`
-- Source repository: `https://github.com/Effect-TS/effect-smol`
+- Source repository: `https://github.com/Effect-TS/effect`
 - Local checkout: `.repos/effect`
 
 The package dependency and source checkout must stay on the same exact beta.
@@ -36,7 +36,7 @@ Run from the SahneJS repository root:
 ```bash
 mkdir -p .repos
 git clone --depth 1 --single-branch --branch effect@4.0.0-beta.97 \
-  https://github.com/Effect-TS/effect-smol .repos/effect
+  https://github.com/Effect-TS/effect.git .repos/effect
 ```
 
 The checkout is gitignored and read-only.
@@ -44,6 +44,7 @@ The checkout is gitignored and read-only.
 ## Pin an Existing Checkout
 
 ```bash
+git -C .repos/effect remote set-url origin https://github.com/Effect-TS/effect.git
 git -C .repos/effect fetch --depth 1 origin tag effect@4.0.0-beta.97
 git -C .repos/effect checkout --detach effect@4.0.0-beta.97
 ```
