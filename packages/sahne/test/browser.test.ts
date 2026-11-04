@@ -183,3 +183,100 @@ describe('remote-debugging Puppeteer support', () => {
 		})
 	);
 });
+
+describe('explicit connections and Chrome profile policy', () => {
+	it.effect('keeps explicit connections independent of ambient mode, CI and TTY', () =>
+		Effect.forEach(['launch', 'auto', 'remote-debugging', undefined], (browserMode) =>
+			resolveBrowserPolicy(
+				config({
+					puppeteerOptions: { connect: { channel: 'chrome' } },
+					browser: { profileDirectory: 'Profile 2', remoteDebuggingTimeout: 1234 }
+				}),
+				{
+					environment: environment({
+						browserMode,
+						ci: 'true',
+						stdinIsTTY: false,
+						stdoutIsTTY: false
+					})
+				}
+			).pipe(
+				Effect.map((policy) =>
+					assert.deepEqual(policy, { _tag: 'RawConnect', profileDirectory: 'Profile 2' })
+				)
+			)
+		).pipe(Effect.asVoid)
+	);
+
+	it.effect('still rejects a malformed SAHNE_BROWSER_MODE on explicit connections', () =>
+		resolveBrowserPolicy(config({ puppeteerOptions: { connect: { channel: 'chrome' } } }), {
+			environment: environment({ browserMode: 'lanuch' })
+		}).pipe(
+			Effect.flip,
+			Effect.map((error) => assert.include(error.message, 'SAHNE_BROWSER_MODE must be'))
+		)
+	);
+
+	it.effect('rejects CLI mode overrides on explicit connections', () =>
+		Effect.forEach(['auto', 'launch', 'remote-debugging'] as const, (modeOverride) =>
+			resolveBrowserPolicy(config({ puppeteerOptions: { connect: { channel: 'chrome' } } }), {
+				modeOverride
+			}).pipe(
+				Effect.flip,
+				Effect.map((error) => assert.include(error.message, '--browser cannot be combined'))
+			)
+		).pipe(Effect.asVoid)
+	);
+
+	it.effect('requires an explicit connection instead of inferring mode from a profile', () =>
+		Effect.forEach([undefined, 'auto', 'launch'] as const, (mode) =>
+			resolveBrowserPolicy(config({ browser: { mode, profileDirectory: 'Profile 2' } }), {
+				environment: environment()
+			}).pipe(
+				Effect.flip,
+				Effect.map((error) => assert.include(error.message, 'requires an explicit connection'))
+			)
+		).pipe(Effect.asVoid)
+	);
+
+	it.effect('names the override that conflicts with a configured profile', () =>
+		Effect.gen(function* () {
+			const profileConfig = config({
+				browser: { mode: 'remote-debugging', profileDirectory: 'Profile 2' }
+			});
+			const cliError = yield* resolveBrowserPolicy(profileConfig, {
+				modeOverride: 'launch',
+				environment: environment()
+			}).pipe(Effect.flip);
+			assert.include(cliError.message, '--browser=launch cannot be combined');
+			assert.notInclude(cliError.message, 'requires an explicit connection');
+
+			const environmentError = yield* resolveBrowserPolicy(profileConfig, {
+				environment: environment({ browserMode: 'auto' })
+			}).pipe(Effect.flip);
+			assert.include(environmentError.message, 'SAHNE_BROWSER_MODE=auto cannot be combined');
+
+			const explicitOverride = yield* resolveBrowserPolicy(profileConfig, {
+				modeOverride: 'remote-debugging',
+				environment: environment({ browserMode: 'launch' })
+			});
+			assert.strictEqual(explicitOverride._tag, 'RemoteDebugging');
+		})
+	);
+
+	it.effect('supports a profile in the existing explicit remote-debugging mode', () =>
+		resolveBrowserPolicy(
+			config({ browser: { mode: 'remote-debugging', profileDirectory: 'Profile 2' } }),
+			{ environment: environment() }
+		).pipe(
+			Effect.map((policy) =>
+				assert.deepEqual(policy, {
+					_tag: 'RemoteDebugging',
+					channel: 'chrome',
+					requestedMode: 'remote-debugging',
+					profileDirectory: 'Profile 2'
+				})
+			)
+		)
+	);
+});

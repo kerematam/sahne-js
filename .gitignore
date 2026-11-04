@@ -36,3 +36,7 @@ website/.vitepress/dist/
 
 # Local source references
 .repos/effect
+
+# TanStack Start / Nitro build output
+.output/
+.tanstack/

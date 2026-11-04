@@ -30,6 +30,8 @@ class FakePage extends EventEmitter {
 	closed = false;
 	failInterception = false;
 	failPreloadRemoval = false;
+	profilePath = '/profiles/Profile 2';
+	$eval = async (): Promise<string> => this.profilePath;
 	currentTitle: string;
 	currentUrl: string;
 	indicatorPrefix: string | undefined;
@@ -127,12 +129,47 @@ class FakePage extends EventEmitter {
 class FakeTarget {
 	constructor(readonly targetPage: FakePage | null) {}
 
+	url = (): string => this.targetPage?.url() ?? '';
 	page = async (): Promise<Page | null> => this.targetPage?.asPage() ?? null;
 	asTarget = (): Target => this as unknown as Target;
 }
 
 class FakeBrowser extends EventEmitter {
 	connected = true;
+	defaultContextId: string | undefined;
+	readonly createdContextIds: Array<string | undefined> = [];
+	target = () => ({
+		createCDPSession: async () => ({
+			detach: async () => {},
+			send: async (
+				method: string,
+				params?: { url?: string; targetId?: string; browserContextId?: string }
+			) => {
+				if (method === 'Target.getBrowserContexts')
+					return {
+						browserContextIds: [],
+						defaultBrowserContextId: this.defaultContextId
+					};
+				if (method === 'Target.getTargets') return { targetInfos: [] };
+				if (method === 'Target.createTarget') {
+					this.createdContextIds.push(params?.browserContextId);
+					const page = (await this.newPage()) as unknown as FakePage;
+					page.currentUrl = params?.url ?? 'about:blank';
+					return { targetId: page.id };
+				}
+				if (method === 'Target.closeTarget') {
+					await this.allPages.find((page) => page.id === params?.targetId)?.close();
+					return { success: true };
+				}
+				throw new Error(`Unexpected CDP method: ${method}`);
+			}
+		})
+	});
+	waitForTarget = async (predicate: (target: Target) => boolean): Promise<Target> => {
+		const target = this.allPages.map((page) => new FakeTarget(page).asTarget()).find(predicate);
+		if (!target) throw new Error('Target not found');
+		return target;
+	};
 	closeCalls = 0;
 	disconnectCalls = 0;
 	newPageCalls = 0;
@@ -654,29 +691,37 @@ describe('high-level browser modes', () => {
 		);
 	});
 
-	it('rejects explicit remote-debugging mode on unsupported Puppeteer', async () => {
-		const browser = new FakeBrowser();
-		let launchCalls = 0;
-		let connectCalls = 0;
+	for (const [label, browserOptions] of [
+		['explicit remote debugging', { mode: 'remote-debugging' }],
+		[
+			'remote debugging with an explicit profile',
+			{ mode: 'remote-debugging', profileDirectory: 'Profile 2' }
+		]
+	] as const) {
+		it(`rejects ${label} on unsupported Puppeteer`, async () => {
+			const browser = new FakeBrowser();
+			let launchCalls = 0;
+			let connectCalls = 0;
 
-		await execute({
-			browser,
-			puppeteerVersion: '24.31.0',
-			config: {
-				initialUrl: 'https://example.test',
-				browser: { mode: 'remote-debugging' }
-			},
-			launch: () => {
-				launchCalls += 1;
-			},
-			connect: () => {
-				connectCalls += 1;
-			}
+			await execute({
+				browser,
+				puppeteerVersion: '24.31.0',
+				config: {
+					initialUrl: 'https://example.test',
+					browser: browserOptions
+				},
+				launch: () => {
+					launchCalls += 1;
+				},
+				connect: () => {
+					connectCalls += 1;
+				}
+			});
+
+			assert.strictEqual(launchCalls, 0);
+			assert.strictEqual(connectCalls, 0);
 		});
-
-		assert.strictEqual(launchCalls, 0);
-		assert.strictEqual(connectCalls, 0);
-	});
+	}
 });
 
 describe('Puppeteer connection passthrough', () => {
@@ -698,4 +743,225 @@ describe('Puppeteer connection passthrough', () => {
 			assert.deepEqual(received, connect);
 		});
 	}
+});
+
+describe('profile selection in the runner', () => {
+	it('verifies the selected profile before interception, hooks, and app navigation', async () => {
+		const browser = new FakeBrowser();
+		browser.defaultContextId = 'work-profile';
+		const logs: string[] = [];
+		let beforeGoto = false;
+		await execute({
+			browser,
+			logs,
+			config: connectedConfig({
+				browser: { profileDirectory: 'Profile 2' },
+				callback: {
+					beforeGoto: () => {
+						beforeGoto = true;
+					},
+					afterGoto: stopAfterGoto
+				}
+			})
+		});
+		const managed = browser.allPages[0];
+		assert.ok(managed);
+		assert.isTrue(beforeGoto);
+		assert.deepEqual(managed.navigations, [
+			'chrome://version/',
+			'about:blank',
+			'https://example.test'
+		]);
+		assert.isBelow(
+			browser.operations.indexOf('managed-1:goto:chrome://version/'),
+			browser.operations.indexOf('managed-1:interception:true')
+		);
+		assert.include(logs, 'Selected Chrome profile: Profile 2');
+		assert.strictEqual(managed.closeCalls, 1);
+		assert.strictEqual(browser.disconnectCalls, 1);
+	});
+
+	it('cleans up a wrong profile even when retaining managed tabs was requested', async () => {
+		const browser = new FakeBrowser();
+		browser.defaultContextId = 'work-profile';
+		let beforeGoto = false;
+		await execute({
+			browser,
+			config: connectedConfig({
+				browser: { profileDirectory: 'Default', closeManagedPageOnExit: false },
+				callback: {
+					beforeGoto: () => {
+						beforeGoto = true;
+					}
+				}
+			})
+		});
+		const probe = browser.allPages[0];
+		assert.ok(probe);
+		assert.isFalse(beforeGoto);
+		assert.deepEqual(probe.navigations, ['chrome://version/']);
+		assert.deepEqual(probe.interceptionStates, []);
+		assert.strictEqual(probe.closeCalls, 1);
+		assert.strictEqual(browser.disconnectCalls, 1);
+		assert.strictEqual(browser.closeCalls, 0);
+	});
+});
+
+describe('explicit connection lifecycle', () => {
+	for (const connect of [{ channel: 'chrome' }, { browserURL: 'http://localhost:9222' }] as const) {
+		it(`uses the same profile selection and timeout for ${Object.keys(connect)[0]}`, async () => {
+			const browser = new FakeBrowser();
+			browser.defaultContextId = 'work-profile';
+			let received: ConnectOptions | undefined;
+			let timeout: number | undefined;
+			let launches = 0;
+			await execute({
+				browser,
+				config: connectedConfig({
+					puppeteerOptions: { connect },
+					browser: { profileDirectory: 'Profile 2', remoteDebuggingTimeout: 1234 }
+				}),
+				options: {
+					environment: { browserMode: 'launch', ci: 'true', stdinIsTTY: false, stdoutIsTTY: false }
+				},
+				connect: (options, duration) => {
+					received = options;
+					timeout = duration;
+				},
+				launch: () => {
+					launches++;
+				}
+			});
+			assert.strictEqual(received, connect);
+			assert.strictEqual(timeout, 1234);
+			assert.strictEqual(launches, 0);
+			assert.deepEqual(browser.allPages[0]?.navigations, [
+				'chrome://version/',
+				'about:blank',
+				'https://example.test'
+			]);
+			assert.strictEqual(browser.disconnectCalls, 1);
+			assert.strictEqual(browser.closeCalls, 0);
+		});
+	}
+
+	it('pins the default connected context even without an explicit profile', async () => {
+		const browser = new FakeBrowser();
+		browser.defaultContextId = 'work-profile';
+		let timeout: number | undefined;
+		await execute({
+			browser,
+			config: connectedConfig(),
+			connect: (_options, duration) => {
+				timeout = duration;
+			}
+		});
+		assert.strictEqual(timeout, 60_000);
+		assert.deepEqual(browser.createdContextIds, ['work-profile']);
+		assert.deepEqual(browser.allPages[0]?.navigations, ['https://example.test']);
+		assert.strictEqual(browser.allPages[0]?.closeCalls, 1);
+	});
+
+	it('falls back to a regular new tab when the default context cannot be pinned', async () => {
+		const browser = new FakeBrowser();
+		browser.target = () => {
+			throw new Error('Target.getBrowserContexts is not supported');
+		};
+		const logs: string[] = [];
+		await execute({ browser, logs, config: connectedConfig() });
+		assert.strictEqual(browser.newPageCalls, 1);
+		assert.deepEqual(browser.allPages[0]?.navigations, ['https://example.test']);
+		assert.ok(
+			logs.some(
+				(line) =>
+					line.includes('opening a regular new tab instead') &&
+					line.includes('Target.getBrowserContexts is not supported')
+			),
+			logs.join('\n')
+		);
+		assert.strictEqual(browser.allPages[0]?.closeCalls, 1);
+	});
+
+	it('does not fall back when an explicitly requested profile cannot be selected', async () => {
+		const browser = new FakeBrowser();
+		browser.target = () => {
+			throw new Error('Target.getBrowserContexts is not supported');
+		};
+		let beforeGoto = false;
+		await execute({
+			browser,
+			config: connectedConfig({
+				browser: { profileDirectory: 'Profile 2' },
+				callback: {
+					beforeGoto: () => {
+						beforeGoto = true;
+					}
+				}
+			})
+		});
+		assert.strictEqual(browser.newPageCalls, 0);
+		assert.isFalse(beforeGoto);
+		assert.strictEqual(browser.disconnectCalls, 1);
+	});
+
+	it('selects the profile before enabling interception for all tabs', async () => {
+		const operations: string[] = [];
+		const personal = new FakePage('personal', operations, 'https://personal.test', 'Personal');
+		const browser = new FakeBrowser([personal]);
+		browser.defaultContextId = 'work-profile';
+		await execute({
+			browser,
+			config: connectedConfig({
+				browser: { profileDirectory: 'Profile 2', dangerouslyEnableForAllTabs: true }
+			})
+		});
+		const managed = browser.allPages[1];
+		assert.ok(managed);
+		assert.deepEqual(managed.navigations, [
+			'chrome://version/',
+			'about:blank',
+			'https://example.test'
+		]);
+		assert.isBelow(
+			operations.indexOf('managed-1:goto:about:blank'),
+			operations.indexOf('personal:interception:true')
+		);
+		assert.deepEqual(managed.interceptionStates, [true, false]);
+	});
+
+	it('keeps BiDi page creation free of Chrome CDP calls', async () => {
+		const browser = new FakeBrowser();
+		browser.target = () => {
+			throw new Error('CDP must not be used for BiDi');
+		};
+		await execute({
+			browser,
+			config: connectedConfig({
+				puppeteerOptions: {
+					connect: { browserURL: 'http://localhost:9222', protocol: 'webDriverBiDi' }
+				}
+			})
+		});
+		assert.deepEqual(browser.allPages[0]?.navigations, ['https://example.test']);
+		assert.strictEqual(browser.allPages[0]?.closeCalls, 1);
+	});
+
+	it('rejects unsupported channel discovery before connecting or launching', async () => {
+		const browser = new FakeBrowser();
+		let connections = 0;
+		let launches = 0;
+		await execute({
+			browser,
+			config: connectedConfig(),
+			puppeteerVersion: '24.31.0',
+			connect: () => {
+				connections++;
+			},
+			launch: () => {
+				launches++;
+			}
+		});
+		assert.strictEqual(connections, 0);
+		assert.strictEqual(launches, 0);
+	});
 });

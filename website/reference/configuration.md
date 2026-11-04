@@ -56,16 +56,19 @@ browser: {
 }
 ```
 
-| Property                      | Type                                                           | Default    | Description                                                                 |
-| ----------------------------- | -------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------- |
-| `mode`                        | `'auto' \| 'remote-debugging' \| 'launch'`                     | `'auto'`   | How Sahne acquires a browser.                                               |
-| `channel`                     | `'chrome' \| 'chrome-beta' \| 'chrome-canary' \| 'chrome-dev'` | `'chrome'` | Channel used by connected-browser modes.                                    |
-| `remoteDebuggingTimeout`      | `number`                                                       | `60_000`   | Positive finite milliseconds to wait for discovery and Chrome approval.     |
-| `indicator`                   | `'title' \| 'none'`                                            | `'title'`  | Whether the connected managed tab gets the `🟢 Sahne — ` title prefix.      |
-| `closeManagedPageOnExit`      | `boolean`                                                      | `true`     | Whether Sahne closes its managed connected-browser tab during cleanup.      |
-| `dangerouslyEnableForAllTabs` | `boolean`                                                      | `false`    | Apply interception to every existing and future tab in a connected browser. |
+| Property                      | Type                                                           | Default    | Description                                                                                  |
+| ----------------------------- | -------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------- |
+| `mode`                        | `'auto' \| 'remote-debugging' \| 'launch'`                     | `'auto'`   | How Sahne acquires a browser.                                                                |
+| `channel`                     | `'chrome' \| 'chrome-beta' \| 'chrome-canary' \| 'chrome-dev'` | `'chrome'` | Channel used by connected-browser modes.                                                     |
+| `profileDirectory`            | `string`                                                       | —          | Existing regular Chrome profile directory, e.g. `Profile 2`; verified before app navigation. |
+| `remoteDebuggingTimeout`      | `number`                                                       | `60_000`   | Positive finite milliseconds to wait for discovery and Chrome approval.                      |
+| `indicator`                   | `'title' \| 'none'`                                            | `'title'`  | Whether the connected managed tab gets the `🟢 Sahne — ` title prefix.                       |
+| `closeManagedPageOnExit`      | `boolean`                                                      | `true`     | Whether Sahne closes its managed connected-browser tab during cleanup.                       |
+| `dangerouslyEnableForAllTabs` | `boolean`                                                      | `false`    | Apply interception to every existing and future tab in a connected browser.                  |
 
-`channel` and `remoteDebuggingTimeout` cannot be used with `mode: 'launch'`. High-level mode, channel, and timeout settings cannot be combined with raw `puppeteerOptions.connect`.
+`profileDirectory` is read only from config and requires explicit `puppeteerOptions.connect` (Chrome CDP) or `browser.mode: 'remote-debugging'`. It cannot select a mode or be used with launch, auto, or WebDriver BiDi. Projects may explicitly map their own environment values in the config.
+
+`channel` and `remoteDebuggingTimeout` cannot be used with `mode: 'launch'`. High-level mode and channel settings cannot be combined with explicit `puppeteerOptions.connect`. The connection timeout applies to both channel and endpoint connections. Explicit connections ignore `SAHNE_BROWSER_MODE` and reject CLI `--browser` overrides.
 
 See [Browser modes](../guide/browser-modes.md) for selection precedence, ownership, and safety behavior.
 

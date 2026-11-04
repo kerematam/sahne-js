@@ -17,7 +17,7 @@ npx sahne [flags]
 --browser <auto|remote-debugging|launch>
 ```
 
-Overrides `SAHNE_BROWSER_MODE` and `browser.mode` for the current run.
+Overrides `SAHNE_BROWSER_MODE` and `browser.mode` for the current run when the config does not specify `puppeteerOptions.connect`. An explicit connection combined with `--browser` is a configuration error.
 
 ```sh
 npx sahne --browser=launch
@@ -86,7 +86,7 @@ Use `info` when diagnosing rule decisions; Sahne's successful proxy, file, ignor
 
 ### `SAHNE_BROWSER_MODE`
 
-Sets the browser mode when the CLI flag is absent:
+Sets the browser mode when the CLI flag is absent and the config does not specify `puppeteerOptions.connect`. Explicit connections ignore this variable:
 
 ```sh
 SAHNE_BROWSER_MODE=launch npx sahne

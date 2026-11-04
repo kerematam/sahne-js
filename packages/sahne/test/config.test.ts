@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, validateConfig, validateInterceptorConfig } from '../src/config.js';
 import { formatSahneError } from '../src/errors.js';
+import { profileDirectoryMessage } from '../src/profile.js';
 import type { InterceptorConfig } from '../src/types.js';
 
 describe('config loading', () => {
@@ -249,4 +250,71 @@ describe('Effect Schema config validation', () => {
 			})
 		);
 	});
+});
+
+describe('profile configuration', () => {
+	it.effect('accepts a profile directory in connected configurations', () =>
+		Effect.forEach(['Default', 'Profile 2'], (profileDirectory) =>
+			validateConfig({
+				initialUrl: 'https://example.test',
+				browser: { mode: 'remote-debugging', profileDirectory }
+			})
+		).pipe(Effect.asVoid)
+	);
+	it.effect('rejects empty names, paths, and non-string selectors', () =>
+		Effect.forEach(
+			['', ' ', '.', '..', '/tmp/Profile 2', 'C:\\Users\\Profile 2', 2, true],
+			(profileDirectory) =>
+				expectInvalidConfig(
+					{
+						initialUrl: 'https://example.test',
+						browser: { profileDirectory },
+						puppeteerOptions: { connect: { channel: 'chrome' } }
+					},
+					profileDirectoryMessage
+				)
+		).pipe(Effect.asVoid)
+	);
+	it.effect('rejects launch configurations with a connected-profile selector', () =>
+		expectInvalidConfig(
+			{
+				initialUrl: 'https://example.test',
+				browser: { mode: 'launch', profileDirectory: 'Default' }
+			},
+			'browser.profileDirectory requires an explicit connection: puppeteerOptions.connect or browser.mode "remote-debugging"'
+		)
+	);
+});
+
+describe('explicit connection configuration', () => {
+	it.effect('accepts connection timeout and profile settings alongside raw Puppeteer options', () =>
+		validateConfig({
+			initialUrl: 'https://example.test',
+			puppeteerOptions: { connect: { channel: 'chrome' } },
+			browser: { profileDirectory: 'Profile 2', remoteDebuggingTimeout: 1234 }
+		}).pipe(Effect.asVoid)
+	);
+	it.effect('rejects profile selectors without an explicit connection', () =>
+		Effect.forEach([undefined, 'auto'], (mode) =>
+			expectInvalidConfig(
+				{
+					initialUrl: 'https://example.test',
+					browser: { mode, profileDirectory: 'Profile 2' }
+				},
+				'browser.profileDirectory requires an explicit connection: puppeteerOptions.connect or browser.mode "remote-debugging"'
+			)
+		).pipe(Effect.asVoid)
+	);
+	it.effect('rejects a Chrome selector on BiDi', () =>
+		expectInvalidConfig(
+			{
+				initialUrl: 'https://example.test',
+				puppeteerOptions: {
+					connect: { protocol: 'webDriverBiDi', browserURL: 'http://localhost:9222' }
+				},
+				browser: { profileDirectory: 'Profile 2' }
+			},
+			'browser.profileDirectory requires a Chrome CDP connection'
+		)
+	);
 });

@@ -46,7 +46,68 @@ See [Remote-debugging connection](./remote-debugging.md) for the complete setup,
 Remote-debugging mode requires Puppeteer 24.32.0 or newer. With an older supported Puppeteer release:
 
 - `auto` warns and launches an isolated browser.
+- Explicit channel connections require upgrading Puppeteer.
 - Explicit `remote-debugging` fails with an upgrade instruction.
+
+## Choose a Chrome profile
+
+Configure the Puppeteer connection explicitly and give Sahne the profile directory
+for its managed tab:
+
+```ts
+export default defineConfig({
+  initialUrl: 'https://app.example.com',
+  puppeteerOptions: {
+    connect: { channel: 'chrome' }
+  },
+  browser: {
+    profileDirectory: 'Profile 2'
+  }
+});
+```
+
+`puppeteerOptions.connect` is passed through to Puppeteer. It can specify a Chrome
+channel or an explicit `browserURL` / `browserWSEndpoint`. An explicit connection
+ignores `SAHNE_BROWSER_MODE`, CI, and terminal detection. Combining it with
+`--browser`, `browser.mode`, `browser.channel`, or launch options is an error.
+`browser.remoteDebuggingTimeout` applies to both channel and endpoint connections
+and defaults to 60 seconds.
+
+`browser.profileDirectory` is Sahne's Chrome-specific selection after connecting.
+Use the directory at the end of **Profile Path** on `chrome://version/`, such as
+`Default` or `Profile 2`. It requires a CDP connection or the existing explicit
+`browser.mode: 'remote-debugging'`. It cannot be used with launch mode, auto mode,
+or WebDriver BiDi, and never changes the browser mode.
+
+The profile value comes only from your config. Environment loading and mapping
+belong to the consuming project. For example:
+
+```ts
+import 'dotenv/config';
+import { defineConfig } from 'sahne-js';
+
+export default defineConfig({
+  initialUrl: 'https://app.example.com',
+  puppeteerOptions: { connect: { channel: 'chrome' } },
+  browser: {
+    profileDirectory: process.env.CHROME_PROFILE?.trim() || undefined
+  }
+});
+```
+
+Sahne selects among regular profile contexts Chrome exposes to the connection.
+It creates temporary tabs to read `chrome://version/`, closes rejected probes,
+and reuses the matching tab as its managed page. Existing tabs are never used as
+probes. Incognito/automation contexts are excluded.
+
+If the requested profile is unavailable, Sahne closes its probes and reports the
+available directories before application navigation. Open the desired profile,
+enable `chrome://inspect/#remote-debugging` there, and reconnect.
+
+Without a selector, CDP connections pin the managed tab to Chrome's connected
+default context when available. Older Chrome versions without that context ID
+retain the previous new-tab behavior. BiDi connections retain ordinary Puppeteer
+page creation.
 
 ## Managed-tab safety
 
@@ -108,12 +169,14 @@ Sahne owns a launched browser. It enables interception on the initial page and f
 
 ## Selection precedence
 
-The browser choice is resolved in this order:
+An explicit `puppeteerOptions.connect` is authoritative: it ignores environment
+mode and rejects CLI `--browser`, `browser.mode`, `browser.channel`, and launch
+options. Without an explicit connection, mode is resolved in this order:
 
 1. CLI `--browser`
 2. `SAHNE_BROWSER_MODE`
 3. `browser.mode`
-4. Raw `puppeteerOptions.connect` or `puppeteerOptions.launch` when no high-level mode, channel, or timeout is configured
+4. Raw `puppeteerOptions.launch` when no high-level mode, channel, or timeout is configured
 5. The `auto` default
 
 ```sh
@@ -129,9 +192,9 @@ Advanced workflows can pass Puppeteer connection settings directly:
 ```ts
 puppeteerOptions: {
   connect: {
-    browserURL: 'http://127.0.0.1:9222';
+    browserURL: 'http://127.0.0.1:9222'
   }
 }
 ```
 
-Raw `connect` is mutually exclusive with raw `launch`. It also cannot be combined with high-level browser mode, channel, or remote-debugging timeout settings.
+Explicit `connect` is mutually exclusive with raw `launch`, CLI `--browser`, and high-level browser mode or channel. `browser.remoteDebuggingTimeout` applies to explicit connections.

@@ -10,11 +10,12 @@ export type BrowserRuntimeEnvironment = {
 };
 
 export type BrowserPolicy =
-	| { readonly _tag: 'RawConnect' }
+	| { readonly _tag: 'RawConnect'; readonly profileDirectory?: string }
 	| { readonly _tag: 'RawLaunch' }
 	| {
 			readonly _tag: 'RemoteDebugging';
 			readonly channel: SahneBrowserChannel;
+			readonly profileDirectory?: string;
 			readonly requestedMode: 'auto' | 'remote-debugging';
 	  }
 	| {
@@ -65,22 +66,52 @@ export const resolveBrowserPolicy = (
 	options: BrowserPolicyOptions = {}
 ): Effect.Effect<BrowserPolicy, ConfigValidationError> =>
 	Effect.gen(function* () {
+		const profileDirectory = config.browser?.profileDirectory;
+		const profile = profileDirectory === undefined ? {} : { profileDirectory };
 		const environment = options.environment ?? currentEnvironment();
+		// A malformed SAHNE_BROWSER_MODE is a configuration error even where an
+		// explicit connection ignores its value.
 		const environmentMode =
 			options.modeOverride === undefined
 				? yield* parseEnvironmentMode(environment.browserMode)
 				: undefined;
+
+		if (config.puppeteerOptions?.connect !== undefined) {
+			if (options.modeOverride !== undefined) {
+				return yield* new ConfigValidationError({
+					message: '--browser cannot be combined with explicit puppeteerOptions.connect'
+				});
+			}
+			// Explicit connections are independent of ambient mode, CI and TTY state.
+			// Static combinations (launch, mode, channel, BiDi profiles) are rejected
+			// by the config schema.
+			return { _tag: 'RawConnect', ...profile };
+		}
+
 		const configuredMode = config.browser?.mode;
 		const requestedMode = options.modeOverride ?? environmentMode ?? configuredMode;
+		if (profileDirectory !== undefined && requestedMode !== 'remote-debugging') {
+			const override =
+				options.modeOverride !== undefined
+					? `--browser=${options.modeOverride}`
+					: environmentMode !== undefined
+						? `SAHNE_BROWSER_MODE=${environmentMode}`
+						: undefined;
+			return yield* new ConfigValidationError({
+				message:
+					override === undefined
+						? 'browser.profileDirectory requires an explicit connection: puppeteerOptions.connect or browser.mode "remote-debugging"'
+						: `${override} cannot be combined with browser.profileDirectory; keep browser.mode "remote-debugging" or drop the profile for this run`
+			});
+		}
 
 		if (
 			requestedMode === undefined &&
 			config.browser?.channel === undefined &&
-			config.browser?.remoteDebuggingTimeout === undefined
-		) {
-			if (config.puppeteerOptions?.connect !== undefined) return { _tag: 'RawConnect' };
-			if (config.puppeteerOptions?.launch !== undefined) return { _tag: 'RawLaunch' };
-		}
+			config.browser?.remoteDebuggingTimeout === undefined &&
+			config.puppeteerOptions?.launch !== undefined
+		)
+			return { _tag: 'RawLaunch' };
 
 		const mode = requestedMode ?? 'auto';
 		if (mode === 'launch') return { _tag: 'Launch', requestedMode: 'launch' };
@@ -88,7 +119,8 @@ export const resolveBrowserPolicy = (
 			return {
 				_tag: 'RemoteDebugging',
 				channel: config.browser?.channel ?? 'chrome',
-				requestedMode: 'remote-debugging'
+				requestedMode: mode,
+				...profile
 			};
 		}
 

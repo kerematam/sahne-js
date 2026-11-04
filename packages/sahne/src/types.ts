@@ -60,8 +60,17 @@ export declare interface SahneConfig {
 		 */
 		channel?: SahneBrowserChannel;
 		/**
-		 * Time in milliseconds to wait for Chrome remote-debugging discovery and
-		 * approval. Defaults to 60 seconds.
+		 * Existing Chrome profile directory, e.g. "Default" or "Profile 2".
+		 * Selects a profile exposed by the connected Chrome session and verifies
+		 * its path before navigating. Requires puppeteerOptions.connect (CDP)
+		 * or explicit browser.mode "remote-debugging". Does not change the mode.
+		 * Values come only from this config; the consuming project may read env.
+		 */
+		profileDirectory?: string;
+		/**
+		 * Time in milliseconds to wait for a connection, including Chrome discovery
+		 * and approval. Applies to puppeteerOptions.connect and remote-debugging
+		 * mode. Defaults to 60 seconds.
 		 */
 		remoteDebuggingTimeout?: number;
 		/**

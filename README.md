@@ -245,7 +245,14 @@ approval wait defaults to 60 seconds and can be changed with
 
 Remote-debugging mode requires Puppeteer `24.32.0` or newer. On older supported
 Puppeteer releases, `auto` warns and launches an isolated browser; explicit
-`remote-debugging` mode fails instead of silently changing modes.
+`remote-debugging` mode and explicit channel connections require upgrading Puppeteer.
+
+Select a profile explicitly with `browser.profileDirectory: 'Profile 2'` alongside
+`puppeteerOptions.connect: { channel: 'chrome' }`. Use the directory at the end of
+**Profile Path** in `chrome://version/`. Environment values can be mapped by your
+config; Sahne reads the profile only from `browser.profileDirectory`.
+An explicit connection ignores ambient browser mode and rejects CLI mode overrides.
+See [profile selection](packages/sahne/README.md#choose-a-chrome-profile) for details.
 
 Sahne creates one fresh managed tab, intercepts only that tab, prefixes its
 title with `🟢 Sahne — `, and leaves existing and subsequently opened personal
@@ -263,8 +270,8 @@ a warning because authenticated and sensitive pages also pass through Sahne's
 request machinery. Sahne still never navigates, marks, or closes those personal
 tabs.
 
-Mode precedence is CLI `--browser`, `SAHNE_BROWSER_MODE`, `browser.mode`, then
-`auto`. Existing raw `puppeteerOptions.connect` and `puppeteerOptions.launch`
+Without explicit `puppeteerOptions.connect`, mode precedence is CLI `--browser`,
+`SAHNE_BROWSER_MODE`, `browser.mode`, then `auto`. Existing raw `puppeteerOptions.connect` and `puppeteerOptions.launch`
 configs remain supported. Use raw `connect.browserURL` for an intentional
 classic endpoint such as `http://127.0.0.1:9222`.
 

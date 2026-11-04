@@ -213,11 +213,6 @@ describe('config validation', () => {
 					message: 'browser.channel cannot be combined with puppeteerOptions.connect'
 				},
 				{
-					browser: { remoteDebuggingTimeout: 5_000 },
-					puppeteerOptions: { connect: { channel: 'chrome' } },
-					message: 'browser.remoteDebuggingTimeout cannot be combined with puppeteerOptions.connect'
-				},
-				{
 					browser: { mode: 'remote-debugging' },
 					puppeteerOptions: { launch: { headless: true } },
 					message: 'browser.mode "remote-debugging" cannot be combined with puppeteerOptions.launch'

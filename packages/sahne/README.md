@@ -244,9 +244,70 @@ sahne --browser=launch
 SAHNE_BROWSER_MODE=launch sahne
 ```
 
-Precedence is CLI, `SAHNE_BROWSER_MODE`, config, then the `auto` default. Raw
+For configurations without explicit `puppeteerOptions.connect`, precedence is
+CLI, `SAHNE_BROWSER_MODE`, config, then the `auto` default. Raw
 Puppeteer launch and connect configs remain supported for advanced and
 backward-compatible workflows.
+
+## Choose a Chrome profile
+
+Configure the Puppeteer connection explicitly and give Sahne the profile directory
+for its managed tab:
+
+```ts
+export default defineConfig({
+  initialUrl: 'https://app.example.com',
+  puppeteerOptions: {
+    connect: { channel: 'chrome' }
+  },
+  browser: {
+    profileDirectory: 'Profile 2'
+  }
+});
+```
+
+`puppeteerOptions.connect` is passed through to Puppeteer. It can specify a Chrome
+channel or an explicit `browserURL` / `browserWSEndpoint`. An explicit connection
+ignores `SAHNE_BROWSER_MODE`, CI, and terminal detection. Combining it with
+`--browser`, `browser.mode`, `browser.channel`, or launch options is an error.
+`browser.remoteDebuggingTimeout` applies to both channel and endpoint connections
+and defaults to 60 seconds.
+
+`browser.profileDirectory` is Sahne's Chrome-specific selection after connecting.
+Use the directory at the end of **Profile Path** on `chrome://version/`, such as
+`Default` or `Profile 2`. It requires a CDP connection or the existing explicit
+`browser.mode: 'remote-debugging'`. It cannot be used with launch mode, auto mode,
+or WebDriver BiDi, and never changes the browser mode.
+
+The profile value comes only from your config. Environment loading and mapping
+belong to the consuming project. For example:
+
+```ts
+import 'dotenv/config';
+import { defineConfig } from 'sahne-js';
+
+export default defineConfig({
+  initialUrl: 'https://app.example.com',
+  puppeteerOptions: { connect: { channel: 'chrome' } },
+  browser: {
+    profileDirectory: process.env.CHROME_PROFILE?.trim() || undefined
+  }
+});
+```
+
+Sahne selects among regular profile contexts Chrome exposes to the connection.
+It creates temporary tabs to read `chrome://version/`, closes rejected probes,
+and reuses the matching tab as its managed page. Existing tabs are never used as
+probes. Incognito/automation contexts are excluded.
+
+If the requested profile is unavailable, Sahne closes its probes and reports the
+available directories before application navigation. Open the desired profile,
+enable `chrome://inspect/#remote-debugging` there, and reconnect.
+
+Without a selector, CDP connections pin the managed tab to Chrome's connected
+default context when available. Older Chrome versions without that context ID
+retain the previous new-tab behavior. BiDi connections retain ordinary Puppeteer
+page creation.
 
 ## Connect to Existing Chrome with Remote Debugging
 
@@ -282,7 +343,8 @@ connection. Remote-debugging mode requires Puppeteer `24.32.0` or newer and is
 currently validated with Puppeteer `25.3.0`.
 
 With an older supported Puppeteer release, `auto` prints a warning and launches
-an isolated browser instead. Explicit `remote-debugging` mode fails with an
+an isolated browser instead. Explicit channel connections require upgrading
+Puppeteer. Explicit `remote-debugging` mode fails with an
 upgrade instruction; it never silently changes modes.
 
 When Sahne connects, it leaves existing tabs alone and creates one fresh
