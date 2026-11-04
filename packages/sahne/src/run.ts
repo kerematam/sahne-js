@@ -1,6 +1,7 @@
 import { Deferred, Effect, FiberSet, FileSystem, Scope } from 'effect';
-import type { Browser, HTTPRequest, Page, Target } from 'puppeteer';
+import type { Browser, ConnectOptions, HTTPRequest, Page, Target } from 'puppeteer';
 import Request from './Request.js';
+import { createChromeProfilePage } from './profile.js';
 import {
 	resolveBrowserPolicy,
 	supportsRemoteDebuggingMode,
@@ -13,6 +14,7 @@ import {
 	HookError,
 	NavigationError,
 	PageSetupError,
+	formatSahneError,
 	type InterceptionError,
 	type RequestActionError,
 	type RunnerError
@@ -455,7 +457,10 @@ export const runEffect = (
 				callback,
 				browser: browserOptions
 			},
-			{ modeOverride: options.browserMode, environment: options.environment }
+			{
+				modeOverride: options.browserMode,
+				environment: options.environment
+			}
 		);
 
 		if (
@@ -473,11 +478,22 @@ export const runEffect = (
 			browserPolicy = { _tag: 'Launch', requestedMode: 'auto' };
 		}
 
-		yield* invokeRunnerHook('beforeLaunch', () => callback.beforeLaunch?.());
+		const connectOptions: ConnectOptions | undefined =
+			browserPolicy._tag === 'RawConnect'
+				? (puppeteerOptions?.connect ?? {})
+				: browserPolicy._tag === 'RemoteDebugging'
+					? { channel: browserPolicy.channel, defaultViewport: sahneViewport }
+					: undefined;
+		if (connectOptions?.channel !== undefined && !supportsRemoteDebuggingMode(launcher.version)) {
+			return yield* new ConfigValidationError({
+				message: `Chrome channel discovery requires Puppeteer >=24.32.0; found ${launcher.version}`
+			});
+		}
 
-		if (browserPolicy._tag === 'RemoteDebugging') {
+		yield* invokeRunnerHook('beforeLaunch', () => callback.beforeLaunch?.());
+		if (connectOptions?.channel !== undefined) {
 			yield* Effect.logInfo(
-				`Requesting access to Chrome remote debugging (${browserPolicy.channel})...`
+				`Requesting access to Chrome remote debugging (${connectOptions.channel})...`
 			);
 		}
 		const remoteDebuggingTimeout = browserOptions.remoteDebuggingTimeout ?? 60_000;
@@ -491,23 +507,16 @@ export const runEffect = (
 				})
 				.pipe(Effect.map((browser): BrowserResource => ({ browser, ownership: 'launched' })));
 		const acquireBrowser: Effect.Effect<BrowserResource, BrowserLaunchError | BrowserConnectError> =
-			browserPolicy._tag === 'RawConnect'
-				? launcher
-						.connect(puppeteerOptions?.connect ?? {})
-						.pipe(Effect.map((browser): BrowserResource => ({ browser, ownership: 'connected' })))
-				: browserPolicy._tag === 'RemoteDebugging'
-					? launcher
-							.connect(
-								{ channel: browserPolicy.channel, defaultViewport: sahneViewport },
-								remoteDebuggingTimeout
-							)
-							.pipe(
-								Effect.mapError((cause) =>
-									remoteDebuggingConnectionError(browserPolicy.channel, cause)
-								),
-								Effect.map((browser): BrowserResource => ({ browser, ownership: 'connected' }))
-							)
-					: launchBrowser();
+			connectOptions !== undefined
+				? launcher.connect(connectOptions, remoteDebuggingTimeout).pipe(
+						Effect.mapError((cause) =>
+							connectOptions.channel !== undefined
+								? remoteDebuggingConnectionError(connectOptions.channel, cause)
+								: cause
+						),
+						Effect.map((browser): BrowserResource => ({ browser, ownership: 'connected' }))
+					)
+				: launchBrowser();
 		const browserResource = yield* Effect.acquireRelease(acquireBrowser, releaseBrowser);
 		const { browser, ownership } = browserResource;
 
@@ -579,18 +588,42 @@ export const runEffect = (
 			yield* setSahneViewport(initialPage);
 			yield* prepareInterception(initialPage);
 		} else {
+			const profileDirectory =
+				browserPolicy._tag === 'RemoteDebugging' || browserPolicy._tag === 'RawConnect'
+					? browserPolicy.profileDirectory
+					: undefined;
+			const closePageOnExit = browserOptions.closeManagedPageOnExit !== false;
+			const newPage = pageOperation('browser.newPage', () => browser.newPage());
+			const createManagedPage: Effect.Effect<Page, PageSetupError> =
+				connectOptions?.protocol === 'webDriverBiDi'
+					? newPage
+					: profileDirectory !== undefined
+						? pageOperation('select Chrome profile', () =>
+								createChromeProfilePage(browser, profileDirectory)
+							)
+						: pageOperation('pin Chrome profile context', () =>
+								createChromeProfilePage(browser)
+							).pipe(
+								// Pinning the default context is best effort; a plain new tab
+								// is what every connected run did before profile support.
+								Effect.catch((error) =>
+									Effect.logWarning(
+										`Could not pin Sahne's managed tab to the connected Chrome profile; opening a regular new tab instead. ${formatSahneError(error)}`
+									).pipe(Effect.andThen(newPage))
+								)
+							);
+			initialPage = yield* Effect.acquireRelease(createManagedPage, (page) =>
+				closePageOnExit ? closeManagedPage(page) : Effect.void
+			);
+			if (profileDirectory !== undefined) {
+				yield* Effect.logInfo(`Selected Chrome profile: ${profileDirectory}`);
+			}
 			if (browserOptions.dangerouslyEnableForAllTabs === true) {
 				yield* Effect.logWarning(dangerousAllTabsWarning);
 				yield* enableFuturePageInterception(false);
 				const existingPages = yield* pageOperation('browser.pages', () => browser.pages());
 				for (const page of existingPages) yield* prepareInterception(page);
 			}
-
-			const closePageOnExit = browserOptions.closeManagedPageOnExit !== false;
-			initialPage = yield* Effect.acquireRelease(
-				pageOperation('browser.newPage', () => browser.newPage()),
-				(page) => (closePageOnExit ? closeManagedPage(page) : Effect.void)
-			);
 			yield* setSahneViewport(initialPage);
 			yield* prepareInterception(initialPage);
 

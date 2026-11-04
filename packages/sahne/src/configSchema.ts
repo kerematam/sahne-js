@@ -1,5 +1,6 @@
 import { Effect, Predicate, Schema } from 'effect';
 import { ConfigValidationError } from './errors.js';
+import { profileDirectoryMessage, profileDirectorySchema } from './profile.js';
 import type { InterceptorConfig, SahneConfig } from './types.js';
 
 const pathToken = '{path}';
@@ -88,6 +89,9 @@ const browserOptionsSchema = Schema.Struct({
 		})
 	).annotate({
 		message: 'browser.channel must be "chrome", "chrome-beta", "chrome-canary", or "chrome-dev"'
+	}),
+	profileDirectory: Schema.optional(profileDirectorySchema).annotate({
+		message: profileDirectoryMessage
 	}),
 	remoteDebuggingTimeout: Schema.optional(
 		Schema.Number.annotate({ message: remoteDebuggingTimeoutMessage }).check(
@@ -222,17 +226,26 @@ const configSchema = Schema.Struct({
 		),
 		Schema.makeFilter(
 			({ browser, puppeteerOptions }) =>
-				browser?.remoteDebuggingTimeout === undefined || puppeteerOptions?.connect === undefined,
-			{
-				message: 'browser.remoteDebuggingTimeout cannot be combined with puppeteerOptions.connect'
-			}
-		),
-		Schema.makeFilter(
-			({ browser, puppeteerOptions }) =>
 				browser?.mode !== 'remote-debugging' || puppeteerOptions?.launch === undefined,
 			{
 				message: 'browser.mode "remote-debugging" cannot be combined with puppeteerOptions.launch'
 			}
+		),
+		Schema.makeFilter(
+			({ browser, puppeteerOptions }) =>
+				browser?.profileDirectory === undefined ||
+				(puppeteerOptions?.launch === undefined &&
+					(puppeteerOptions?.connect !== undefined || browser.mode === 'remote-debugging')),
+			{
+				message:
+					'browser.profileDirectory requires an explicit connection: puppeteerOptions.connect or browser.mode "remote-debugging"'
+			}
+		),
+		Schema.makeFilter(
+			({ browser, puppeteerOptions }) =>
+				browser?.profileDirectory === undefined ||
+				puppeteerOptions?.connect?.protocol !== 'webDriverBiDi',
+			{ message: 'browser.profileDirectory requires a Chrome CDP connection' }
 		),
 		Schema.makeFilter(
 			({ browser }) => browser?.mode !== 'launch' || browser.channel === undefined,

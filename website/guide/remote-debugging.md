@@ -22,15 +22,15 @@ The managed tab uses your existing Chrome session. Only run configurations you t
 
 ## Configure the connection
 
-Set the browser mode explicitly in `sahne.config.ts`:
+Configure the Puppeteer connection explicitly in `sahne.config.ts`:
 
 ```ts
 import { defineConfig } from 'sahne-js';
 
 export default defineConfig({
   initialUrl: 'https://app.example.com/dashboard',
-  browser: {
-    mode: 'remote-debugging'
+  puppeteerOptions: {
+    connect: { channel: 'chrome' }
   },
   interceptor: {
     match: 'https://app.example.com/**',
@@ -40,7 +40,7 @@ export default defineConfig({
 });
 ```
 
-You can also select the mode for one run without changing the configuration:
+For configurations without `puppeteerOptions.connect`, the existing browser mode API also supports a one-run selection:
 
 ```sh
 npx sahne --browser=remote-debugging
@@ -76,9 +76,8 @@ In CI or another non-interactive process, `auto` launches an isolated browser in
 Chrome stable is the default. Select another installed channel when needed:
 
 ```ts
-browser: {
-  mode: 'remote-debugging',
-  channel: 'chrome-beta'
+puppeteerOptions: {
+  connect: { channel: 'chrome-beta' }
 }
 ```
 
@@ -97,7 +96,6 @@ Increase the discovery and approval window for a slow or manual setup:
 
 ```ts
 browser: {
-  mode: 'remote-debugging',
   remoteDebuggingTimeout: 120_000
 }
 ```
@@ -120,7 +118,6 @@ Retain the managed tab after Sahne exits with:
 
 ```ts
 browser: {
-  mode: 'remote-debugging',
   closeManagedPageOnExit: false
 }
 ```
@@ -140,12 +137,12 @@ For an intentional classic debugging endpoint, use raw Puppeteer configuration i
 ```ts
 puppeteerOptions: {
   connect: {
-    browserURL: 'http://127.0.0.1:9222';
+    browserURL: 'http://127.0.0.1:9222'
   }
 }
 ```
 
-Raw `puppeteerOptions.connect` cannot be combined with high-level `browser.mode`, `browser.channel`, or `browser.remoteDebuggingTimeout` settings.
+Explicit `puppeteerOptions.connect` cannot be combined with `browser.mode`, `browser.channel`, or CLI `--browser`. It ignores `SAHNE_BROWSER_MODE`, CI, and terminal detection. `browser.remoteDebuggingTimeout` controls the connection wait for both channels and endpoints. To choose a Chrome profile, set [`browser.profileDirectory`](./browser-modes.md#choose-a-chrome-profile).
 
 ## Troubleshoot the connection
 
